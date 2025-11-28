@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 require 'set'
 
 module TCB
@@ -11,7 +12,8 @@ module TCB
       @dispatcher = Thread.new do
         loop do
           event = @queue.pop
-          dispatch(event)
+          # Spawn a thread for the entire dispatch so queue processing isn't blocked
+          Thread.new { dispatch(event) }
         end
       end
     end
@@ -19,7 +21,7 @@ module TCB
     # Subscribe to a specific event class
     def subscribe(event_class, &block)
       @mutex.synchronize do
-        @subscribers[event_class] << block
+        @subscribers[event_class].add(block)
       end
     end
 
@@ -32,13 +34,17 @@ module TCB
     private
 
     def dispatch(event)
-      handlers = nil
+      handlers = @mutex.synchronize { @subscribers[event.class].dup }
 
-      @mutex.synchronize do
-        handlers = @subscribers[event.class].dup
+      threads = handlers.map do |handler|
+        Thread.new { execute_handler(handler, event) }
       end
 
-      handlers.each { |h| h.call(event) }
+      threads.each(&:join)
+    end
+
+    def execute_handler(handler, event)
+      handler.call(event)
     end
   end
 end
