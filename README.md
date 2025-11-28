@@ -1,4 +1,4 @@
-# TCB::Events
+# TCB Events
 
 The humble event bus - a simple, thread-safe event bus for Ruby applications using the pub/sub pattern.
 
@@ -25,13 +25,7 @@ require 'tcb-events'
 bus = TCB::EventBus.new
 
 # Define your event classes
-class UserRegistered
-  attr_reader :email
-  
-  def initialize(email)
-    @email = email
-  end
-end
+UserRegistered = Data.define(:email)
 
 # Subscribe to events
 bus.subscribe(UserRegistered) do |event|
