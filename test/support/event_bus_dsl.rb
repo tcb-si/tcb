@@ -5,6 +5,9 @@ module EventBusDSL
 
   def create_event_bus(options = {})
     @event_bus = TCB::EventBus.new
+
+    # Auto-subscribe to SubscriberInvocationFailed for test observability
+    subscribe_to(TCB::SubscriberInvocationFailed) { |event| }
     @handler_calls = Hash.new { |h, k| h[k] = [] }
     @named_handlers = {}
     @handler_call_order = []
@@ -170,7 +173,7 @@ module EventBusDSL
 
   def assert_events_dispatched_concurrently(event_class, expected_count, max_duration_seconds)
     start_time = @publish_start_time
-    
+
     # Wait for all handlers to complete
     wait_for_handlers_to_complete(event_class, expected_count, timeout: max_duration_seconds)
 
@@ -327,14 +330,66 @@ def wait_for_handlers_to_complete(event_class, expected_count, timeout: 1.0)
   loop do
     total_completed = (@handler_calls[event_class].size + (@handler_errors[event_class]&.size || 0))
     return self if total_completed >= expected_count
-    
+
     if Time.now > deadline
       actual = total_completed
       raise "Timeout waiting for #{expected_count} handlers to complete. Only #{actual} completed."
     end
-    
+
     sleep 0.01 # Small poll interval
   end
+end
+
+# SubscriberInvocationFailed Assertions
+
+def assert_subscriber_invocation_failed_published(original_event_class, expected_count: 1)
+  wait_for_dispatch
+
+  failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
+  matching_failures = failures.select { |f| f.original_event.class == original_event_class }
+
+  assert_equal expected_count, matching_failures.size,
+    "Expected #{expected_count} SubscriberInvocationFailed event(s) for #{original_event_class}, got #{matching_failures.size}"
+
+  self
+end
+
+def assert_subscriber_invocation_failed_with_error(original_event_class, error_class)
+  wait_for_dispatch
+
+  failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
+  matching_failure = failures.find do |f|
+    f.original_event.class == original_event_class && f.error_class == error_class.name
+  end
+
+  assert matching_failure,
+    "Expected SubscriberInvocationFailed with error #{error_class} for #{original_event_class}, but none found"
+
+  self
+end
+
+def assert_subscriber_invocation_failed_contains_source(original_event_class)
+  wait_for_dispatch
+  failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
+  matching_failure = failures.find { |f| f.original_event.class == original_event_class }
+
+  assert matching_failure, "No SubscriberInvocationFailed event found for #{original_event_class}"
+  assert matching_failure.subscriber_source, "SubscriberInvocationFailed should contain subscriber_source"
+  refute_empty matching_failure.subscriber_source, "subscriber_source should not be empty"
+
+  self
+end
+
+def assert_captured_subscriber_invocation_failed(original_event_class, &block)
+  wait_for_dispatch
+
+  failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
+  matching_failures = failures.select { |f| f.original_event.class == original_event_class }
+
+  assert !matching_failures.empty?, "No SubscriberInvocationFailed events found for #{original_event_class}"
+
+  block.call(matching_failures)
+  self
 end
 
   private
@@ -344,10 +399,10 @@ end
       begin
         # Record thread ID immediately
         @handler_thread_ids[event_class] << Thread.current.object_id
-        
+
         # Execute original handler
         original_handler.call(event)
-        
+
         # Only record successful calls
         @handler_calls[event_class] << event
         @handler_call_order << { event_class: event_class, handler_id: handler_id, event: event }

@@ -6,6 +6,7 @@ require 'minitest/autorun'
 require 'tcb-events'
 require_relative 'support/event_bus_dsl'
 require "minitest/reporters"
+require "debug"
 
 Minitest::Reporters.use! [Minitest::Reporters::SpecReporter.new, Minitest::Reporters::ProgressReporter.new]
 

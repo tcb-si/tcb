@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "tcb/event_bus"
+require_relative "tcb/subscriber_invocation_failed"
 
 module TCB
   module Events
