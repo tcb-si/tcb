@@ -7,7 +7,7 @@ require 'tcb-events'
 require_relative 'support/event_bus_dsl'
 require "minitest/reporters"
 
-Minitest::Reporters.use! [Minitest::Reporters::SpecReporter.new]
+Minitest::Reporters.use! [Minitest::Reporters::SpecReporter.new, Minitest::Reporters::ProgressReporter.new]
 
 # Define sample event classes for testing
 UserRegistered = Data.define(:id, :email)
