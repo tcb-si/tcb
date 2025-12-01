@@ -9,9 +9,11 @@ module EventBusDSL
     @named_handlers = {}
     @handler_call_order = []
     @handler_thread_ids = Hash.new { |h, k| h[k] = [] }
+    @handler_errors = Hash.new { |h, k| h[k] = [] }
     @main_thread_id = Thread.current.object_id
     @publish_start_time = nil
     @last_publish_duration = nil
+    @handler_latches = Hash.new { |h, k| h[k] = [] }
     self
   end
 
@@ -168,7 +170,9 @@ module EventBusDSL
 
   def assert_events_dispatched_concurrently(event_class, expected_count, max_duration_seconds)
     start_time = @publish_start_time
-    wait_for_dispatch
+    
+    # Wait for all handlers to complete
+    wait_for_handlers_to_complete(event_class, expected_count, timeout: max_duration_seconds)
 
     actual_count = @handler_calls[event_class].size
     assert_equal expected_count, actual_count,
@@ -245,17 +249,113 @@ module EventBusDSL
     @last_published_event
   end
 
+  # Error Handling Subscriptions
+
+  def subscribe_to_with_failure(event_class, &handler)
+    wrapped_handler = wrap_handler_with_failure_tracking(event_class, handler)
+    event_bus.subscribe(event_class, &wrapped_handler)
+    self
+  end
+
+  def subscribe_failing_handler(event_class, error_class, fail_count: Float::INFINITY)
+    attempt_count = 0
+    subscribe_to(event_class) do |event|
+      attempt_count += 1
+      raise error_class, "Simulated error" if attempt_count <= fail_count
+    end
+    self
+  end
+
+  # Error Assertions
+
+  def assert_handler_error_captured(event_class, error_class)
+    wait_for_dispatch
+
+    errors = @handler_errors[event_class] || []
+    matching_error = errors.find { |e| e.is_a?(error_class) }
+
+    assert matching_error,
+      "Expected #{error_class} to be captured for #{event_class}, but got #{errors.map(&:class).inspect}"
+
+    self
+  end
+
+  def assert_other_handlers_executed(event_class, expected_successful_count)
+    wait_for_dispatch
+
+    successful_calls = @handler_calls[event_class].size
+    assert_equal expected_successful_count, successful_calls,
+      "Expected #{expected_successful_count} handlers to execute successfully, got #{successful_calls}"
+
+    self
+  end
+
+  def assert_all_handlers_executed_despite_errors(event_class, total_handler_count)
+    wait_for_dispatch
+
+    total_executions = @handler_calls[event_class].size + (@handler_errors[event_class]&.size || 0)
+    assert_equal total_handler_count, total_executions,
+      "Expected all #{total_handler_count} handlers to execute, got #{total_executions}"
+
+    self
+  end
+
+  def assert_dispatching_continued_after_error(event_class, events_after_error)
+    wait_for_dispatch
+
+    assert @handler_calls[event_class].size >= events_after_error,
+      "Expected dispatching to continue after error with #{events_after_error} events processed"
+
+    self
+  end
+
+  def assert_failure_event_published(original_event_class)
+    wait_for_dispatch
+
+    failure_events = @handler_calls[HandlerFailed] || []
+    matching_failure = failure_events.find { |f| f.original_event.class == original_event_class }
+
+    assert matching_failure,
+      "Expected HandlerFailed event for #{original_event_class} but none found"
+
+    self
+  end
+
+# Synchronization - wait for specific number of handlers to complete
+def wait_for_handlers_to_complete(event_class, expected_count, timeout: 1.0)
+  deadline = Time.now + timeout
+  loop do
+    total_completed = (@handler_calls[event_class].size + (@handler_errors[event_class]&.size || 0))
+    return self if total_completed >= expected_count
+    
+    if Time.now > deadline
+      actual = total_completed
+      raise "Timeout waiting for #{expected_count} handlers to complete. Only #{actual} completed."
+    end
+    
+    sleep 0.01 # Small poll interval
+  end
+end
+
   private
 
   def wrap_handler(event_class, handler_id, original_handler)
     proc do |event|
-      # Record the call and thread ID
-      @handler_calls[event_class] << event
-      @handler_thread_ids[event_class] << Thread.current.object_id
-      @handler_call_order << { event_class: event_class, handler_id: handler_id, event: event }
-
-      # Execute original handler
-      original_handler.call(event)
+      begin
+        # Record thread ID immediately
+        @handler_thread_ids[event_class] << Thread.current.object_id
+        
+        # Execute original handler
+        original_handler.call(event)
+        
+        # Only record successful calls
+        @handler_calls[event_class] << event
+        @handler_call_order << { event_class: event_class, handler_id: handler_id, event: event }
+      rescue => e
+        # Record the error
+        @handler_errors[event_class] << e
+        raise  # Re-raise so EventBus can handle isolation
+      end
     end
   end
 

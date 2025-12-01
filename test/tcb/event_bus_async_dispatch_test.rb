@@ -40,6 +40,8 @@ module TCB
         .subscribe_to(OrderPlaced) { |event| }
         .publish_event(UserRegistered.new(id: 1, email: "slow@example.com"))
         .publish_event(OrderPlaced.new(order_id: 1, total: 10.0))
+        .wait_for_handlers_to_complete(UserRegistered, 1)
+        .wait_for_handlers_to_complete(OrderPlaced, 1)
         .assert_handler_called_times(UserRegistered, 1)
         .assert_handler_called_times(OrderPlaced, 1)
     end

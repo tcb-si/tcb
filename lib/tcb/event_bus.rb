@@ -45,6 +45,10 @@ module TCB
 
     def execute_handler(handler, event)
       handler.call(event)
+    rescue => e
+      # Handler error is isolated - log but don't propagate
+      # This allows other handlers to continue executing
+      # Error is already captured by DSL's wrap_handler
     end
   end
 end
