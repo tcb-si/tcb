@@ -7,6 +7,6 @@ require_relative "tcb/event_bus"
 
 module TCB
   module Events
-    VERSION = "0.2.0"
+    VERSION = "0.3.56"
   end
 end

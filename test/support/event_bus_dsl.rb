@@ -542,6 +542,131 @@ module EventBusDSL
     self
   end
 
+
+  # Signal Handling Setup
+
+  def create_event_bus_with_signal_handling(shutdown_timeout: 5, signals: [:USR1, :USR2] )
+    @event_bus = TCB::EventBus.new(
+      handle_signals: true,
+      shutdown_timeout: shutdown_timeout,
+      shutdown_signals: signals  # Use USR1/USR2 in tests, TERM/INT in production
+    )
+
+    # Auto-subscribe for observability
+    subscribe_to(TCB::SubscriberInvocationFailed) { |event| }
+    subscribe_to(TCB::EventBusShutdown) { |event| }
+    @handler_calls = Hash.new { |h, k| h[k] = [] }
+    @named_handlers = {}
+    @handler_call_order = []
+    @handler_thread_ids = Hash.new { |h, k| h[k] = [] }
+    @handler_errors = Hash.new { |h, k| h[k] = [] }
+    @main_thread_id = Thread.current.object_id
+    @publish_start_time = nil
+    @last_publish_duration = nil
+    @handler_latches = Hash.new { |h, k| h[k] = [] }
+    @shutdown_start_time = nil
+    @shutdown_end_time = nil
+    self
+  end
+
+  # Signal Simulation
+
+  def send_signal(signal)
+    # Actually send the signal - safe because we're using USR1/USR2
+    Process.kill(signal.to_s, Process.pid)
+    sleep 0.05 # Give signal time to be processed
+    self
+  end
+
+  # Signal Handling Assertions
+
+  def assert_signal_handler_registered(signal)
+    # Verify handler is registered by checking Signal.trap
+    handler = Signal.trap(signal, 'DEFAULT')
+    Signal.trap(signal, handler) # Restore immediately
+
+    refute_equal 'DEFAULT', handler,
+      "Expected signal handler for #{signal} to be registered"
+
+    self
+  end
+
+  def assert_signal_triggers_shutdown(signal)
+    # Verify that sending a signal initiates shutdown
+    send_signal(signal)
+    wait_for_dispatch # Give shutdown time to initiate
+
+    assert_bus_shutdown
+    self
+  end
+
+  def assert_signal_drains_queue_before_shutdown(signal, event_class, expected_count)
+    # Verify that signal-triggered shutdown drains the queue
+    send_signal(signal)
+    wait_for_dispatch
+
+    assert_events_drained_before_shutdown(event_class, expected_count)
+    assert_bus_shutdown
+    self
+  end
+
+  def assert_custom_signal_callback_invoked
+    # Verify that custom on_signal callback was called
+    # This would check a flag or counter set by the callback
+    assert @signal_callback_invoked,
+      "Expected custom signal callback to be invoked"
+    self
+  end
+
+  def assert_no_signal_handler_registered(signal)
+    # Verify NO handler is registered
+    handler = Signal.trap(signal, 'DEFAULT')
+    Signal.trap(signal, handler) # Restore immediately
+
+    assert_equal 'DEFAULT', handler,
+      "Expected no custom signal handler for #{signal}"
+
+    self
+  end
+
+  def assert_shutdown_timeout_from_config(expected_timeout)
+    # Verify shutdown used the configured timeout value
+    wait_for_dispatch
+
+    shutdown_events = @handler_calls[TCB::EventBusShutdown] || []
+    initiated_event = shutdown_events.find { |e| e.status == :initiated }
+
+    assert initiated_event, "Expected shutdown initiated event"
+    assert_equal expected_timeout, initiated_event.timeout_seconds,
+      "Expected shutdown timeout to be #{expected_timeout}s"
+
+    self
+  end
+
+  # Helper for tracking custom callbacks
+
+  def track_signal_callback
+    @signal_callback_invoked = false
+    lambda do |signal|
+      @signal_callback_invoked = true
+      @signal_received = signal
+    end
+  end
+
+  def assert_signal_callback_received(expected_signal)
+    assert @signal_callback_invoked, "Expected signal callback to be invoked"
+    assert_equal expected_signal.to_s, @signal_received.to_s,
+      "Expected signal #{expected_signal}, got #{@signal_received}"
+    self
+  end
+
+  def teardown_event_bus_signals
+    # Restore USR1/USR2 to default handlers after each test
+    [:USR1, :USR2].each do |sig|
+      Signal.trap(sig, 'DEFAULT')
+    end
+  end
+
   private
 
   def wrap_handler(event_class, handler_id, original_handler)

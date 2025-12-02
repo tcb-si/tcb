@@ -3,15 +3,21 @@
 require 'set'
 require_relative 'event_bus/running_strategy'
 require_relative 'event_bus/shutdown_strategy'
+require_relative 'event_bus/termination_signal_handler'
 
 module TCB
   class EventBus
     class ShutdownError < StandardError; end
 
-    attr_reader :queue, :subscribers, :subscriber_metadata, :mutex, 
+    attr_reader :queue, :subscribers, :subscriber_metadata, :mutex,
                 :active_dispatches, :dispatcher, :events_processed_during_shutdown
 
-    def initialize
+    def initialize(
+      handle_signals: false,
+      shutdown_timeout: 30.0,
+      shutdown_signals: [:TERM, :INT],
+      on_signal: nil
+    )
       @queue = Queue.new
       @subscribers = Hash.new { |h, k| h[k] = Set.new }
       @subscriber_metadata = {}
@@ -35,6 +41,16 @@ module TCB
             @mutex.synchronize { @active_dispatches -= 1 }
           end
         end
+      end
+
+      if handle_signals
+        @termination_signal_handler = TerminationSignalHandler.new(
+          event_bus: self,
+          shutdown_timeout: shutdown_timeout,
+          signals: shutdown_signals,
+          on_signal: on_signal
+        )
+        @termination_signal_handler.install
       end
     end
 
