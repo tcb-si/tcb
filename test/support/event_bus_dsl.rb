@@ -8,6 +8,7 @@ module EventBusDSL
 
     # Auto-subscribe to SubscriberInvocationFailed for test observability
     subscribe_to(TCB::SubscriberInvocationFailed) { |event| }
+    subscribe_to(TCB::EventBusShutdown) { |event| }
     @handler_calls = Hash.new { |h, k| h[k] = [] }
     @named_handlers = {}
     @handler_call_order = []
@@ -324,73 +325,222 @@ module EventBusDSL
     self
   end
 
-# Synchronization - wait for specific number of handlers to complete
-def wait_for_handlers_to_complete(event_class, expected_count, timeout: 1.0)
-  deadline = Time.now + timeout
-  loop do
-    total_completed = (@handler_calls[event_class].size + (@handler_errors[event_class]&.size || 0))
-    return self if total_completed >= expected_count
+  # Synchronization - wait for specific number of handlers to complete
+  def wait_for_handlers_to_complete(event_class, expected_count, timeout: 1.0)
+    deadline = Time.now + timeout
+    loop do
+      total_completed = (@handler_calls[event_class].size + (@handler_errors[event_class]&.size || 0))
+      return self if total_completed >= expected_count
 
-    if Time.now > deadline
-      actual = total_completed
-      raise "Timeout waiting for #{expected_count} handlers to complete. Only #{actual} completed."
+      if Time.now > deadline
+        actual = total_completed
+        raise "Timeout waiting for #{expected_count} handlers to complete. Only #{actual} completed."
+      end
+
+      sleep 0.01 # Small poll interval
+    end
+  end
+
+  # SubscriberInvocationFailed Assertions
+
+  def assert_subscriber_invocation_failed_published(original_event_class, expected_count: 1)
+    wait_for_dispatch
+
+    failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
+    matching_failures = failures.select { |f| f.original_event.class == original_event_class }
+
+    assert_equal expected_count, matching_failures.size,
+      "Expected #{expected_count} SubscriberInvocationFailed event(s) for #{original_event_class}, got #{matching_failures.size}"
+
+    self
+  end
+
+  def assert_subscriber_invocation_failed_with_error(original_event_class, error_class)
+    wait_for_dispatch
+
+    failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
+    matching_failure = failures.find do |f|
+      f.original_event.class == original_event_class && f.error_class == error_class.name
     end
 
-    sleep 0.01 # Small poll interval
-  end
-end
+    assert matching_failure,
+      "Expected SubscriberInvocationFailed with error #{error_class} for #{original_event_class}, but none found"
 
-# SubscriberInvocationFailed Assertions
-
-def assert_subscriber_invocation_failed_published(original_event_class, expected_count: 1)
-  wait_for_dispatch
-
-  failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
-  matching_failures = failures.select { |f| f.original_event.class == original_event_class }
-
-  assert_equal expected_count, matching_failures.size,
-    "Expected #{expected_count} SubscriberInvocationFailed event(s) for #{original_event_class}, got #{matching_failures.size}"
-
-  self
-end
-
-def assert_subscriber_invocation_failed_with_error(original_event_class, error_class)
-  wait_for_dispatch
-
-  failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
-  matching_failure = failures.find do |f|
-    f.original_event.class == original_event_class && f.error_class == error_class.name
+    self
   end
 
-  assert matching_failure,
-    "Expected SubscriberInvocationFailed with error #{error_class} for #{original_event_class}, but none found"
+  def assert_subscriber_invocation_failed_contains_source(original_event_class)
+    wait_for_dispatch
+    failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
+    matching_failure = failures.find { |f| f.original_event.class == original_event_class }
 
-  self
-end
+    assert matching_failure, "No SubscriberInvocationFailed event found for #{original_event_class}"
+    assert matching_failure.subscriber_source, "SubscriberInvocationFailed should contain subscriber_source"
+    refute_empty matching_failure.subscriber_source, "subscriber_source should not be empty"
 
-def assert_subscriber_invocation_failed_contains_source(original_event_class)
-  wait_for_dispatch
-  failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
-  matching_failure = failures.find { |f| f.original_event.class == original_event_class }
+    self
+  end
 
-  assert matching_failure, "No SubscriberInvocationFailed event found for #{original_event_class}"
-  assert matching_failure.subscriber_source, "SubscriberInvocationFailed should contain subscriber_source"
-  refute_empty matching_failure.subscriber_source, "subscriber_source should not be empty"
+  def assert_captured_subscriber_invocation_failed(original_event_class, &block)
+    wait_for_dispatch
 
-  self
-end
+    failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
+    matching_failures = failures.select { |f| f.original_event.class == original_event_class }
 
-def assert_captured_subscriber_invocation_failed(original_event_class, &block)
-  wait_for_dispatch
+    assert !matching_failures.empty?, "No SubscriberInvocationFailed events found for #{original_event_class}"
 
-  failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
-  matching_failures = failures.select { |f| f.original_event.class == original_event_class }
+    block.call(matching_failures)
+    self
+  end
 
-  assert !matching_failures.empty?, "No SubscriberInvocationFailed events found for #{original_event_class}"
+  # Lifecycle Management
 
-  block.call(matching_failures)
-  self
-end
+  def shutdown_bus(drain: true, timeout: 5.0)
+    @shutdown_start_time = Time.now
+    @event_bus.shutdown(drain: drain, timeout: timeout)
+    @shutdown_end_time = Time.now
+    self
+  end
+
+  def force_shutdown_bus
+    @shutdown_start_time = Time.now
+    @event_bus.force_shutdown
+    @shutdown_end_time = Time.now
+    self
+  end
+
+  # Lifecycle State Assertions
+
+  def assert_bus_accepting_events
+    # Try publishing a test event - if it raises, bus is not accepting
+    test_event = UserRegistered.new(id: -1, email: "test@bus-state-check.com")
+    begin
+      @event_bus.publish(test_event)
+      # Successfully published, bus is accepting events
+    rescue => e
+      flunk "Expected bus to be accepting events, but got error: #{e.message}"
+    end
+    self
+  end
+
+  def assert_bus_shutdown
+    # Check that dispatcher thread is no longer running
+    # and that the bus is in shutdown state
+    sleep 0.1 # Give dispatcher time to fully terminate
+
+    assert @event_bus.shutdown?, "Expected bus to be shut down"
+
+    self
+  end
+
+  def assert_rejects_events_after_shutdown
+    error_raised = false
+    begin
+      publish_event(UserRegistered.new(id: -1, email: "should-fail@example.com"))
+    rescue => e
+      error_raised = true
+      assert e.class.name.include?("Shutdown"),
+        "Expected shutdown-related error, got #{e.class}: #{e.message}"
+    end
+
+    assert error_raised, "Expected publishing after shutdown to raise an error"
+    self
+  end
+
+  # Shutdown Events Assertions
+
+  def assert_shutdown_initiated_event_published
+    wait_for_dispatch
+
+    shutdown_events = @handler_calls[TCB::EventBusShutdown] || []
+    initiated_event = shutdown_events.find { |e| e.status == :initiated }
+
+    assert initiated_event, "Expected EventBusShutdown with status=:initiated to be published"
+    self
+  end
+
+  def assert_shutdown_completed_event_published
+    wait_for_dispatch
+
+    shutdown_events = @handler_calls[TCB::EventBusShutdown] || []
+    completed_event = shutdown_events.find { |e| e.status == :completed }
+
+    assert completed_event, "Expected EventBusShutdown with status=:completed to be published"
+    self
+  end
+
+  def assert_shutdown_timeout_exceeded
+    wait_for_dispatch
+
+    shutdown_events = @handler_calls[TCB::EventBusShutdown] || []
+    timeout_event = shutdown_events.find { |e| e.status == :timeout_exceeded }
+
+    assert timeout_event, "Expected EventBusShutdown with status=:timeout_exceeded to be published"
+    self
+  end
+
+  # Drain Verification
+
+  def assert_events_drained_before_shutdown(event_class, expected_count)
+    wait_for_dispatch
+
+    actual_count = @handler_calls[event_class].size
+    assert_equal expected_count, actual_count,
+      "Expected #{expected_count} events to be drained before shutdown, got #{actual_count}"
+
+    self
+  end
+
+  def assert_events_not_drained(event_class)
+    wait_for_dispatch
+
+    calls = @handler_calls[event_class]
+    assert calls.empty?,
+      "Expected no events to be processed (force shutdown), but #{calls.size} were processed"
+
+    self
+  end
+
+  def assert_events_abandoned_after_timeout(event_class, min_abandoned_count: 1)
+    wait_for_dispatch
+
+    total_published = @handler_calls[event_class].size + min_abandoned_count
+    actual_processed = @handler_calls[event_class].size
+
+    assert actual_processed < total_published,
+      "Expected at least #{min_abandoned_count} events to be abandoned, but all were processed"
+
+    self
+  end
+
+  # Timing Assertions
+
+  def assert_shutdown_duration_within(expected_duration_seconds)
+    refute_nil @shutdown_start_time, "Shutdown was not initiated"
+    refute_nil @shutdown_end_time, "Shutdown did not complete"
+
+    actual_duration = @shutdown_end_time - @shutdown_start_time
+    assert actual_duration <= expected_duration_seconds,
+      "Expected shutdown to complete within #{expected_duration_seconds}s, but took #{actual_duration}s"
+
+    self
+  end
+
+  # Error Handling
+
+  def assert_raises_shutdown_error(&block)
+    error_raised = false
+    begin
+      block.call
+    rescue => e
+      error_raised = true
+      assert e.class.name.include?("Shutdown"),
+        "Expected shutdown-related error, got #{e.class}: #{e.message}"
+    end
+
+    assert error_raised, "Expected block to raise a shutdown error"
+    self
+  end
 
   private
 
