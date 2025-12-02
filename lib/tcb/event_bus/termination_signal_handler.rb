@@ -12,11 +12,9 @@ module TCB
         @original_handlers = {}
       end
 
-      def install(actually_trap_signals: true)
+      def install
         @signals.each do |sig|
-          if actually_trap_signals
-            @original_handlers[sig] = Signal.trap(sig) { handle_signal(sig) }
-          end
+          @original_handlers[sig] = Signal.trap(sig) { handle_signal(sig) }
         end
       end
 
