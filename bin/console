@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
 require 'bundler/setup'
-require './lib/tcb-events'
+require './lib/tcb'
 require 'irb'
 
 IRB.start(__FILE__)

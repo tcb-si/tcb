@@ -6,7 +6,5 @@ require_relative "tcb/event_bus_shutdown"
 require_relative "tcb/event_bus"
 
 module TCB
-  module Events
-    VERSION = "0.3.56"
-  end
+  VERSION = "0.4.0"
 end

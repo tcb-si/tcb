@@ -1,18 +1,18 @@
 # frozen_string_literal: true
 
-require_relative "lib/tcb-events"
+require_relative "lib/tcb"
 
 Gem::Specification.new do |spec|
-  spec.name = "tcb-events"
-  spec.version = TCB::Events::VERSION
+  spec.name = "tcb"
+  spec.version = TCB::VERSION
   spec.authors = ["Ljubomir Marković"]
   spec.email = ["ljubomir@tcb.si"]
 
-  spec.summary = "The humble event bus"
-  spec.description = "A simple, thread-safe event bus for Ruby applications using pub/sub pattern"
-  spec.homepage = "https://github.com/tcb/tcb-events"
+  spec.summary = "Event and Command buses for DDD on Rails"
+  spec.description = "Thread-safe event and command buses using pub/sub and command patterns"
+  spec.homepage = "https://github.com/tcb-si/tcb"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.0.0"
+  spec.required_ruby_version = ">= 3.3.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = spec.homepage
