@@ -1,4 +1,4 @@
-# TCB Events
+# TCB
 
 The humble event bus - a simple, thread-safe event bus for Ruby applications using the pub/sub pattern.
 
@@ -6,7 +6,7 @@ The humble event bus - a simple, thread-safe event bus for Ruby applications usi
 
 Add this line to your application's Gemfile:
 ```ruby
-gem 'tcb-events'
+gem 'tcb'
 ```
 
 And then execute:
@@ -15,11 +15,11 @@ And then execute:
 
 Or install it yourself as:
 
-    $ gem install tcb-events
+    $ gem install tcb
 
 ## Usage
 ```ruby
-require 'tcb-events'
+require 'tcb'
 
 # Create an event bus
 bus = TCB::EventBus.new
