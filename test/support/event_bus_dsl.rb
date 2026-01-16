@@ -189,6 +189,30 @@ module EventBusDSL
     self
   end
 
+  def assert_handlers_execute_in_dispatcher_thread(event_class)
+    wait_for_dispatch
+
+    calls = @handler_calls[event_class]
+    assert !calls.empty?, "Expected #{event_class} handler to be called"
+
+    # Verify all handlers executed in the SAME thread (the dispatcher thread)
+    handler_thread_ids = @handler_thread_ids[event_class]
+    refute_nil handler_thread_ids, "Handler thread IDs should be recorded"
+    refute_empty handler_thread_ids, "Should have recorded handler thread IDs"
+
+    # All handlers for this event should execute in the same thread
+    unique_thread_ids = handler_thread_ids.uniq
+    assert_equal 1, unique_thread_ids.size,
+      "All handlers for #{event_class} should execute in the same thread, but got #{unique_thread_ids.size} different threads"
+
+    # And that thread should NOT be the main thread
+    dispatcher_thread_id = unique_thread_ids.first
+    refute_equal @main_thread_id, dispatcher_thread_id,
+      "Handlers should execute in dispatcher thread, not main thread"
+
+    self
+  end
+
   def assert_publish_returns_immediately(max_duration_seconds = 0.1)
     publish_time = @last_publish_duration
     refute_nil publish_time, "Publish duration should be recorded"

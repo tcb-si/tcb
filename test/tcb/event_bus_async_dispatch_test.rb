@@ -15,15 +15,26 @@ module TCB
         .assert_handler_executed_asynchronously(UserRegistered)
     end
 
-    # Test: Multiple events dispatched concurrently
-    def test_multiple_events_dispatched_concurrently
+    # Test: Multiple events can be published without blocking (even with slow handlers)
+    def test_multiple_events_published_without_blocking
       subscribe_to(UserRegistered) { |event| sleep 0.2 }
         .publish_events(
           UserRegistered.new(id: 1, email: "user1@example.com"),
           UserRegistered.new(id: 2, email: "user2@example.com"),
           UserRegistered.new(id: 3, email: "user3@example.com")
         )
-        .assert_events_dispatched_concurrently(UserRegistered, 3, 0.45)
+        .assert_publish_returns_immediately(0.1)
+        .wait_for_handlers_to_complete(UserRegistered, 3)
+        .assert_handler_called_times(UserRegistered, 3)
+    end
+
+    # Test: Handlers execute in dispatcher thread (not main thread, but sequentially per event)
+    def test_handlers_execute_in_dispatcher_thread
+      subscribe_to(UserRegistered) { |event| }
+        .subscribe_to(UserRegistered) { |event| }
+        .subscribe_to(UserRegistered) { |event| }
+        .publish_event(UserRegistered.new(id: 1, email: "test@example.com"))
+        .assert_handlers_execute_in_dispatcher_thread(UserRegistered)
     end
 
     # Test: Publish returns immediately without blocking

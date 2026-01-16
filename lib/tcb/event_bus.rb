@@ -31,15 +31,8 @@ module TCB
           event = @queue.pop
           break if event == :shutdown_sentinel
 
-          # Increment active dispatches before spawning
-          @mutex.synchronize { @active_dispatches += 1 }
-
-          # Spawn a thread for the entire dispatch so queue processing isn't blocked
-          Thread.new do
-            dispatch(event)
-            # Decrement when dispatch completes
-            @mutex.synchronize { @active_dispatches -= 1 }
-          end
+          # Dispatch directly in this thread (no wrapper thread)
+          dispatch(event)
         end
       end
 
@@ -86,15 +79,17 @@ module TCB
 
     # Public for strategy access
     def dispatch(event)
-      @events_processed_during_shutdown += 1 if shutdown?
+      @mutex.synchronize { @active_dispatches += 1 }
 
+      @events_processed_during_shutdown += 1 if shutdown?
       handlers = @mutex.synchronize { @subscribers[event.class].dup }
 
-      threads = handlers.map do |handler|
-        Thread.new { execute_handler(handler, event) }
+      # Execute handlers sequentially in the dispatcher thread
+      handlers.each do |handler|
+        execute_handler(handler, event)
       end
-
-      threads.each(&:join)
+    ensure
+      @mutex.synchronize { @active_dispatches -= 1 }
     end
 
     private
