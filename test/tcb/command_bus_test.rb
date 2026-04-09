@@ -31,6 +31,29 @@ module TCB
       end
     end
 
+    module Orders
+      PlaceOrder = Data.define(:order_id, :customer) do
+        def validate! = nil
+      end
+
+      class PlaceOrderHandler
+        def call(command)
+          order = Order.new
+          events = TCB.record(aggregates: [order]) do
+            order.place(order_id: command.order_id, customer: command.customer)
+          end
+          TCB.publish(*events)
+        end
+      end
+    end
+
+    module CommandWithHandlerInDifferentNamespace
+      PlaceOrder = Data.define(:order_id, :customer) do
+        def validate! = nil
+      end
+      # Handler namerno ni tukaj
+    end
+
     def setup
       TCB.configure { |c| c.event_bus = TCB::EventBus.new }
     end
@@ -74,6 +97,18 @@ module TCB
       end
       assert_includes error.message, "RaiseOnCommandWithoutHandler"
       assert_includes error.message, "RaiseOnCommandWithoutHandlerHandler"
+    end
+
+    def test_execute_finds_handler_in_same_namespace
+      events = TCB.execute(Orders::PlaceOrder.new(order_id: 1, customer: "Alice"))
+      assert_includes events, OrderPlaced.new(order_id: 1, customer: "Alice")
+    end
+
+    def test_execute_raises_when_handler_not_in_same_namespace
+      error = assert_raises(TCB::CommandHandlerNotFound) do
+        TCB.execute(CommandWithHandlerInDifferentNamespace::PlaceOrder.new(order_id: 1, customer: "Alice"))
+      end
+      assert_includes error.message, "PlaceOrderHandler"
     end
   end
 end
