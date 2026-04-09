@@ -22,14 +22,12 @@ module TCB
     end
 
     class PlaceOrderHandler
-      include TCB::Publishes
-
       def call(command)
         order = Order.new
         events = TCB.record(aggregates: [order]) do
           order.place(order_id: command.order_id, customer: command.customer)
         end
-        publish(*events)
+        TCB.publish(*events)
       end
     end
 
