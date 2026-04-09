@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "tcb/handles_events"
 require_relative "tcb/records_events"
 require_relative "tcb/record"
 require_relative "tcb/configuration"

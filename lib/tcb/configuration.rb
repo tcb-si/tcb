@@ -9,6 +9,29 @@ module TCB
     def event_bus
       @event_bus || raise(ConfigurationError, "TCB event_bus is not configured. Call TCB.configure { |c| c.event_bus = TCB::EventBus.new }")
     end
+
+    def event_handlers=(modules)
+      @event_handlers = modules
+      flush_event_handlers
+    end
+
+    def event_handlers
+      @event_handlers || []
+    end
+
+    private
+
+    def flush_event_handlers
+      @event_handlers.each do |mod|
+        mod.event_handler_registrations.each do |registration|
+          registration[:handlers].each do |handler|
+            event_bus.subscribe(registration[:event_class]) do |event|
+              handler.new.call(event)
+            end
+          end
+        end
+      end
+    end
   end
 
   def self.configure
