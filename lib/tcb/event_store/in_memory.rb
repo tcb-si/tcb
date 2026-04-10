@@ -1,0 +1,42 @@
+# frozen_string_literal: true
+
+require "securerandom"
+
+module TCB
+  class EventStore
+    class InMemory
+      def initialize
+        @streams = Hash.new { |h, k| h[k] = [] }
+        @mutex = Mutex.new
+      end
+
+      def append(stream_id:, events:, occurred_at: Time.now)
+        @mutex.synchronize do
+          envelopes = events.map.with_index(next_version(stream_id)) do |event, version|
+            EventStreamEnvelope.new(
+              event: event,
+              event_id: SecureRandom.uuid,
+              stream_id: stream_id,
+              version: version,
+              occurred_at: occurred_at
+            )
+          end
+          @streams[stream_id].concat(envelopes)
+          envelopes
+        end
+      end
+
+      def read(stream_id, after_version: nil, occurred_after: nil)
+        @mutex.synchronize { @streams[stream_id].dup }
+          .then { |e| after_version  ? e.select { |env| env.version > after_version }   : e }
+          .then { |e| occurred_after ? e.select { |env| env.occurred_at > occurred_after } : e }
+      end
+
+      private
+
+      def next_version(stream_id)
+        @streams[stream_id].size + 1
+      end
+    end
+  end
+end
