@@ -1,4 +1,10 @@
+# frozen_string_literal: true
+
+require_relative "poll_assert"
+
 module EventBusDSL
+  include PollAssert
+
   attr_reader :event_bus
 
   # Setup & Initialization
@@ -94,12 +100,12 @@ module EventBusDSL
   # Assertions
 
   def assert_event_delivered_to_handler(event_class, expected_data = {})
-    wait_for_dispatch
-
-    calls = @handler_calls[event_class]
-    assert !calls.empty?, "Expected #{event_class} to be delivered but no calls recorded"
+    poll_assert("#{event_class} to be delivered", within: 1.0) do
+      !@handler_calls[event_class].empty?
+    end
 
     unless expected_data.empty?
+      calls = @handler_calls[event_class]
       matching_call = calls.find do |call|
         expected_data.all? { |key, value| call.public_send(key) == value }
       end
@@ -110,7 +116,9 @@ module EventBusDSL
   end
 
   def assert_handler_called_times(event_class, expected_count)
-    wait_for_dispatch
+    poll_assert("#{event_class} handler called #{expected_count} times", within: 1.0) do
+      @handler_calls[event_class].size >= expected_count
+    end
 
     actual_count = @handler_calls[event_class].size
     assert_equal expected_count, actual_count,
@@ -120,7 +128,9 @@ module EventBusDSL
   end
 
   def assert_handlers_called_in_order(event_class, *handler_ids)
-    wait_for_dispatch
+    poll_assert("handlers for #{event_class} to be called", within: 1.0) do
+      @handler_call_order.any? { |call| call[:event_class] == event_class && call[:handler_id] }
+    end
 
     actual_order = @handler_call_order
       .select { |call| call[:event_class] == event_class && call[:handler_id] }
@@ -133,8 +143,7 @@ module EventBusDSL
   end
 
   def assert_event_not_delivered(event_class)
-    wait_for_dispatch
-
+    # Negative assertion — caller must ensure prior wait (e.g. wait_for_handlers_to_complete)
     calls = @handler_calls[event_class]
     assert calls.empty?, "Expected #{event_class} NOT to be delivered but #{calls.size} calls recorded"
 
@@ -151,19 +160,19 @@ module EventBusDSL
   end
 
   def assert_captured_events(event_class, &block)
-    wait_for_dispatch
+    poll_assert("#{event_class} events to be captured", within: 1.0) do
+      !@handler_calls[event_class].empty?
+    end
     events = @handler_calls[event_class]
     block.call(events)
     self
   end
 
   def assert_handler_executed_asynchronously(event_class)
-    wait_for_dispatch
+    poll_assert("#{event_class} handler to be called", within: 1.0) do
+      !@handler_calls[event_class].empty?
+    end
 
-    calls = @handler_calls[event_class]
-    assert !calls.empty?, "Expected #{event_class} handler to be called"
-
-    # Verify handler was executed in a different thread
     handler_thread_id = @handler_thread_ids[event_class]&.first
     refute_nil handler_thread_id, "Handler thread ID should be recorded"
     refute_equal @main_thread_id, handler_thread_id,
@@ -175,7 +184,6 @@ module EventBusDSL
   def assert_events_dispatched_concurrently(event_class, expected_count, max_duration_seconds)
     start_time = @publish_start_time
 
-    # Wait for all handlers to complete
     wait_for_handlers_to_complete(event_class, expected_count, timeout: max_duration_seconds)
 
     actual_count = @handler_calls[event_class].size
@@ -190,22 +198,18 @@ module EventBusDSL
   end
 
   def assert_handlers_execute_in_dispatcher_thread(event_class)
-    wait_for_dispatch
+    poll_assert("#{event_class} handler to be called", within: 1.0) do
+      !@handler_calls[event_class].empty?
+    end
 
-    calls = @handler_calls[event_class]
-    assert !calls.empty?, "Expected #{event_class} handler to be called"
-
-    # Verify all handlers executed in the SAME thread (the dispatcher thread)
     handler_thread_ids = @handler_thread_ids[event_class]
     refute_nil handler_thread_ids, "Handler thread IDs should be recorded"
     refute_empty handler_thread_ids, "Should have recorded handler thread IDs"
 
-    # All handlers for this event should execute in the same thread
     unique_thread_ids = handler_thread_ids.uniq
     assert_equal 1, unique_thread_ids.size,
       "All handlers for #{event_class} should execute in the same thread, but got #{unique_thread_ids.size} different threads"
 
-    # And that thread should NOT be the main thread
     dispatcher_thread_id = unique_thread_ids.first
     refute_equal @main_thread_id, dispatcher_thread_id,
       "Handlers should execute in dispatcher thread, not main thread"
@@ -224,20 +228,17 @@ module EventBusDSL
   end
 
   def assert_dispatcher_thread_running
-    sleep 0.1 # Give dispatcher time to start
-
-    dispatcher_threads = Thread.list.select do |t|
-      t != Thread.current && t.status == "sleep"
+    poll_assert("background dispatcher thread to be running", within: 1.0) do
+      Thread.list.any? { |t| t != Thread.current && t.status == "sleep" }
     end
-
-    assert dispatcher_threads.any?,
-      "Background dispatcher thread should be running"
 
     self
   end
 
   def assert_all_events_received(event_class, expected_count)
-    wait_for_dispatch
+    poll_assert("all #{expected_count} #{event_class} events to be received", within: 1.0) do
+      @handler_calls[event_class].size >= expected_count
+    end
 
     actual_count = @handler_calls[event_class].size
     assert_equal expected_count, actual_count,
@@ -247,7 +248,9 @@ module EventBusDSL
   end
 
   def assert_unique_events_received(event_class, expected_ids)
-    wait_for_dispatch
+    poll_assert("all unique #{event_class} events to be received", within: 1.0) do
+      @handler_calls[event_class].size >= expected_ids.size
+    end
 
     received_ids = @handler_calls[event_class].map(&:id).sort
     assert_equal expected_ids.sort, received_ids,
@@ -257,7 +260,9 @@ module EventBusDSL
   end
 
   def assert_no_event_loss(event_class, expected_total_invocations)
-    wait_for_dispatch(timeout: 1.0)
+    poll_assert("all #{expected_total_invocations} #{event_class} invocations", within: 2.0) do
+      @handler_calls[event_class].size >= expected_total_invocations
+    end
 
     actual_invocations = @handler_calls[event_class].size
     assert_equal expected_total_invocations, actual_invocations,
@@ -269,7 +274,9 @@ module EventBusDSL
   # Query Methods
 
   def captured_events_for(event_class)
-    wait_for_dispatch
+    poll_assert("#{event_class} events to be captured", within: 1.0) do
+      !@handler_calls[event_class].empty?
+    end
     @handler_calls[event_class].dup
   end
 
@@ -297,19 +304,17 @@ module EventBusDSL
   # Error Assertions
 
   def assert_handler_error_captured(event_class, error_class)
-    wait_for_dispatch
-
-    errors = @handler_errors[event_class] || []
-    matching_error = errors.find { |e| e.is_a?(error_class) }
-
-    assert matching_error,
-      "Expected #{error_class} to be captured for #{event_class}, but got #{errors.map(&:class).inspect}"
+    poll_assert("#{error_class} to be captured for #{event_class}", within: 1.0) do
+      (@handler_errors[event_class] || []).any? { |e| e.is_a?(error_class) }
+    end
 
     self
   end
 
   def assert_other_handlers_executed(event_class, expected_successful_count)
-    wait_for_dispatch
+    poll_assert("#{expected_successful_count} successful handlers for #{event_class}", within: 1.0) do
+      @handler_calls[event_class].size >= expected_successful_count
+    end
 
     successful_calls = @handler_calls[event_class].size
     assert_equal expected_successful_count, successful_calls,
@@ -319,7 +324,10 @@ module EventBusDSL
   end
 
   def assert_all_handlers_executed_despite_errors(event_class, total_handler_count)
-    wait_for_dispatch
+    poll_assert("all #{total_handler_count} handlers for #{event_class} to execute", within: 1.0) do
+      total = @handler_calls[event_class].size + (@handler_errors[event_class]&.size || 0)
+      total >= total_handler_count
+    end
 
     total_executions = @handler_calls[event_class].size + (@handler_errors[event_class]&.size || 0)
     assert_equal total_handler_count, total_executions,
@@ -329,46 +337,37 @@ module EventBusDSL
   end
 
   def assert_dispatching_continued_after_error(event_class, events_after_error)
-    wait_for_dispatch
-
-    assert @handler_calls[event_class].size >= events_after_error,
-      "Expected dispatching to continue after error with #{events_after_error} events processed"
+    poll_assert("dispatching to continue after error", within: 1.0) do
+      @handler_calls[event_class].size >= events_after_error
+    end
 
     self
   end
 
   def assert_failure_event_published(original_event_class)
-    wait_for_dispatch
-
-    failure_events = @handler_calls[HandlerFailed] || []
-    matching_failure = failure_events.find { |f| f.original_event.class == original_event_class }
-
-    assert matching_failure,
-      "Expected HandlerFailed event for #{original_event_class} but none found"
+    poll_assert("HandlerFailed event for #{original_event_class}", within: 1.0) do
+      (@handler_calls[HandlerFailed] || []).any? { |f| f.original_event.class == original_event_class }
+    end
 
     self
   end
 
   # Synchronization - wait for specific number of handlers to complete
   def wait_for_handlers_to_complete(event_class, expected_count, timeout: 1.0)
-    deadline = Time.now + timeout
-    loop do
-      total_completed = (@handler_calls[event_class].size + (@handler_errors[event_class]&.size || 0))
-      return self if total_completed >= expected_count
-
-      if Time.now > deadline
-        actual = total_completed
-        raise "Timeout waiting for #{expected_count} handlers to complete. Only #{actual} completed."
-      end
-
-      sleep 0.01 # Small poll interval
+    poll_assert("#{expected_count} handlers to complete for #{event_class}", within: timeout) do
+      total = @handler_calls[event_class].size + (@handler_errors[event_class]&.size || 0)
+      total >= expected_count
     end
+    self
   end
 
   # SubscriberInvocationFailed Assertions
 
   def assert_subscriber_invocation_failed_published(original_event_class, expected_count: 1)
-    wait_for_dispatch
+    poll_assert("#{expected_count} SubscriberInvocationFailed for #{original_event_class}", within: 1.0) do
+      failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
+      failures.count { |f| f.original_event.class == original_event_class } >= expected_count
+    end
 
     failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
     matching_failures = failures.select { |f| f.original_event.class == original_event_class }
@@ -380,25 +379,23 @@ module EventBusDSL
   end
 
   def assert_subscriber_invocation_failed_with_error(original_event_class, error_class)
-    wait_for_dispatch
-
-    failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
-    matching_failure = failures.find do |f|
-      f.original_event.class == original_event_class && f.error_class == error_class.name
+    poll_assert("SubscriberInvocationFailed with #{error_class} for #{original_event_class}", within: 1.0) do
+      failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
+      failures.any? { |f| f.original_event.class == original_event_class && f.error_class == error_class.name }
     end
-
-    assert matching_failure,
-      "Expected SubscriberInvocationFailed with error #{error_class} for #{original_event_class}, but none found"
 
     self
   end
 
   def assert_subscriber_invocation_failed_contains_source(original_event_class)
-    wait_for_dispatch
+    poll_assert("SubscriberInvocationFailed for #{original_event_class}", within: 1.0) do
+      failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
+      failures.any? { |f| f.original_event.class == original_event_class }
+    end
+
     failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
     matching_failure = failures.find { |f| f.original_event.class == original_event_class }
 
-    assert matching_failure, "No SubscriberInvocationFailed event found for #{original_event_class}"
     assert matching_failure.subscriber_source, "SubscriberInvocationFailed should contain subscriber_source"
     refute_empty matching_failure.subscriber_source, "subscriber_source should not be empty"
 
@@ -406,12 +403,13 @@ module EventBusDSL
   end
 
   def assert_captured_subscriber_invocation_failed(original_event_class, &block)
-    wait_for_dispatch
+    poll_assert("SubscriberInvocationFailed events for #{original_event_class}", within: 1.0) do
+      failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
+      failures.any? { |f| f.original_event.class == original_event_class }
+    end
 
     failures = @handler_calls[TCB::SubscriberInvocationFailed] || []
     matching_failures = failures.select { |f| f.original_event.class == original_event_class }
-
-    assert !matching_failures.empty?, "No SubscriberInvocationFailed events found for #{original_event_class}"
 
     block.call(matching_failures)
     self
@@ -436,11 +434,9 @@ module EventBusDSL
   # Lifecycle State Assertions
 
   def assert_bus_accepting_events
-    # Try publishing a test event - if it raises, bus is not accepting
     test_event = UserRegistered.new(id: -1, email: "test@bus-state-check.com")
     begin
       @event_bus.publish(test_event)
-      # Successfully published, bus is accepting events
     rescue => e
       flunk "Expected bus to be accepting events, but got error: #{e.message}"
     end
@@ -448,11 +444,9 @@ module EventBusDSL
   end
 
   def assert_bus_shutdown
-    # Check that dispatcher thread is no longer running
-    # and that the bus is in shutdown state
-    sleep 0.1 # Give dispatcher time to fully terminate
-
-    assert @event_bus.shutdown?, "Expected bus to be shut down"
+    poll_assert("bus to be shut down", within: 1.0) do
+      @event_bus.shutdown?
+    end
 
     self
   end
@@ -474,39 +468,35 @@ module EventBusDSL
   # Shutdown Events Assertions
 
   def assert_shutdown_initiated_event_published
-    wait_for_dispatch
+    poll_assert("EventBusShutdown :initiated to be published", within: 1.0) do
+      (@handler_calls[TCB::EventBusShutdown] || []).any? { |e| e.status == :initiated }
+    end
 
-    shutdown_events = @handler_calls[TCB::EventBusShutdown] || []
-    initiated_event = shutdown_events.find { |e| e.status == :initiated }
-
-    assert initiated_event, "Expected EventBusShutdown with status=:initiated to be published"
     self
   end
 
   def assert_shutdown_completed_event_published
-    wait_for_dispatch
+    poll_assert("EventBusShutdown :completed to be published", within: 1.0) do
+      (@handler_calls[TCB::EventBusShutdown] || []).any? { |e| e.status == :completed }
+    end
 
-    shutdown_events = @handler_calls[TCB::EventBusShutdown] || []
-    completed_event = shutdown_events.find { |e| e.status == :completed }
-
-    assert completed_event, "Expected EventBusShutdown with status=:completed to be published"
     self
   end
 
   def assert_shutdown_timeout_exceeded
-    wait_for_dispatch
+    poll_assert("EventBusShutdown :timeout_exceeded to be published", within: 1.0) do
+      (@handler_calls[TCB::EventBusShutdown] || []).any? { |e| e.status == :timeout_exceeded }
+    end
 
-    shutdown_events = @handler_calls[TCB::EventBusShutdown] || []
-    timeout_event = shutdown_events.find { |e| e.status == :timeout_exceeded }
-
-    assert timeout_event, "Expected EventBusShutdown with status=:timeout_exceeded to be published"
     self
   end
 
   # Drain Verification
 
   def assert_events_drained_before_shutdown(event_class, expected_count)
-    wait_for_dispatch
+    poll_assert("#{expected_count} #{event_class} events to be drained", within: 1.0) do
+      @handler_calls[event_class].size >= expected_count
+    end
 
     actual_count = @handler_calls[event_class].size
     assert_equal expected_count, actual_count,
@@ -516,8 +506,7 @@ module EventBusDSL
   end
 
   def assert_events_not_drained(event_class)
-    wait_for_dispatch
-
+    # Negative assertion — force_shutdown_bus is synchronous, so state is settled
     calls = @handler_calls[event_class]
     assert calls.empty?,
       "Expected no events to be processed (force shutdown), but #{calls.size} were processed"
@@ -526,8 +515,6 @@ module EventBusDSL
   end
 
   def assert_events_abandoned_after_timeout(event_class, min_abandoned_count: 1)
-    wait_for_dispatch
-
     total_published = @handler_calls[event_class].size + min_abandoned_count
     actual_processed = @handler_calls[event_class].size
 
@@ -571,26 +558,14 @@ module EventBusDSL
   def wrap_handler(event_class, handler_id, original_handler)
     proc do |event|
       begin
-        # Record thread ID immediately
         @handler_thread_ids[event_class] << Thread.current.object_id
-
-        # Execute original handler
         original_handler.call(event)
-
-        # Only record successful calls
         @handler_calls[event_class] << event
         @handler_call_order << { event_class: event_class, handler_id: handler_id, event: event }
       rescue => e
-        # Record the error
         @handler_errors[event_class] << e
-        raise  # Re-raise so EventBus can handle isolation
+        raise
       end
     end
-  end
-
-  def wait_for_dispatch(timeout: 0.1)
-    # Give dispatcher thread time to process
-    # In future, we'll make this smarter with synchronous mode
-    sleep timeout
   end
 end
