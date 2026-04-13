@@ -11,11 +11,7 @@ module TCB
       end
 
       def context_from_module(mod)
-        mod.name
-          .gsub("::", NAMESPACE_SEPARATOR)
-          .gsub(/([A-Z]+)([A-Z][a-z])/, '\1_\2')
-          .gsub(/([a-z\d])([A-Z])/, '\1_\2')
-          .downcase
+        DomainContext.from_module(mod).to_s
       end
 
       def parse(string)

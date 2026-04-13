@@ -74,7 +74,6 @@ module TCB
           .split("/")
           .map { |part| part.split("_").map(&:capitalize).join }
           .join("::")
-
         Object.const_get("#{module_name}::EventRecord")
       end
 

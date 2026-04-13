@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
-require_relative "tcb/event_store/active_record"
+require_relative "tcb/domain_context"
 require_relative "tcb/event_query"
+require_relative "tcb/event_store/active_record"
 require_relative "tcb/event_store/event_stream_envelope"
 require_relative "tcb/event_store/in_memory"
 require_relative "tcb/stream_id"
@@ -34,7 +35,7 @@ module TCB
   def self.read(domain_module)
     EventQuery.new(
       store: config.event_store,
-      context: StreamId.context_from_module(domain_module)
+      context: DomainContext.from_module(domain_module).to_s
     )
   end
 end
