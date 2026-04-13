@@ -1,10 +1,13 @@
 # TCB
 
-The humble event bus - a simple, thread-safe event bus for Ruby applications using the pub/sub pattern.
+A lightweight, thread-safe event and command runtime for Domain-Driven Design on Rails.
+
+TCB gives you a clean domain language that reads like pseudocode, hides infrastructure details, and avoids vendor lock-in.
 
 ## Installation
 
 Add this line to your application's Gemfile:
+
 ```ruby
 gem 'tcb'
 ```
@@ -13,36 +16,369 @@ And then execute:
 
     $ bundle install
 
-Or install it yourself as:
+---
 
-    $ gem install tcb
+## Event Bus
 
-## Usage
+The simplest use of TCB is a standalone pub/sub bus. Events are named in the past tense — they represent facts that have already happened:
+
 ```ruby
-require 'tcb'
+UserRegistered = Data.define(:id, :email)
+```
 
-# Create an event bus
+### Block handlers
+
+```ruby
 bus = TCB::EventBus.new
 
-# Define your event classes
-UserRegistered = Data.define(:email)
-
-# Subscribe to events
 bus.subscribe(UserRegistered) do |event|
-  puts "New user registered: #{event.email}"
+  WelcomeMailer.deliver(event.email)
 end
 
-# Publish events
-bus.publish(UserRegistered.new("user@example.com"))
+bus.subscribe(UserRegistered) do |event|
+  Analytics.track("user_registered", user_id: event.id)
+end
+
+bus.publish(UserRegistered.new(id: 1, email: "alice@example.com"))
 ```
+
+### Class handlers with `TCB::HandlesEvents`
+
+For more structure, declare handlers in a module. This works independently of aggregates and persistence — you can use `HandlesEvents` purely as a pub/sub mechanism:
+
+```ruby
+module Notifications
+  include TCB::HandlesEvents
+
+  on UserRegistered, execute(SendWelcomeEmail, TrackRegistration)
+  on OrderPlaced,    execute(SendOrderConfirmation)
+end
+
+class SendWelcomeEmail
+  def call(event)
+    WelcomeMailer.deliver(event.email)
+  end
+end
+
+class TrackRegistration
+  def call(event)
+    Analytics.track("user_registered", user_id: event.id)
+  end
+end
+```
+
+Register at configuration time:
+
+```ruby
+TCB.configure do |c|
+  c.event_bus      = TCB::EventBus.new
+  c.event_handlers = [Notifications]
+end
+
+TCB.publish(UserRegistered.new(id: 1, email: "alice@example.com"))
+```
+
+Handlers execute asynchronously in a background thread. Each handler is isolated — one failure does not prevent others from executing.
+
+---
+
+## Commands
+
+Commands express intent. They are validated before execution and routed to a handler by convention (`PlaceOrder` → `PlaceOrderHandler`):
+
+```ruby
+PlaceOrder = Data.define(:order_id, :customer) do
+  def validate!
+    raise ArgumentError, "customer required" if customer.nil?
+  end
+end
+
+class PlaceOrderHandler
+  def call(command)
+    # ... domain logic
+  end
+end
+
+TCB.execute(PlaceOrder.new(order_id: 42, customer: "Alice"))
+```
+
+---
+
+## Domain-Driven Design
+
+For richer domains, TCB provides aggregates, event persistence, and reactive handlers — all expressed in a clean domain language.
+
+### Recommended file structure
+
+```
+app/domain/
+  orders.rb               # domain module — the public interface
+  orders/
+    order.rb              # aggregate
+    place_order_handler.rb
+    reserve_inventory.rb
+    charge_payment.rb
+```
+
+### The domain module
+
+Keep everything that belongs together, together. Events, commands, persistence rules, and reactions are all declared in one place:
+
+```ruby
+# app/domain/orders.rb
+module Orders
+  include TCB::HandlesEvents
+
+  # Events — past tense, immutable facts
+  OrderPlaced    = Data.define(:order_id, :customer)
+  OrderCancelled = Data.define(:order_id, :reason)
+
+  # Commands — present tense, expressed intent
+  PlaceOrder  = Data.define(:order_id, :customer) do
+    def validate!
+      raise ArgumentError, "customer required" if customer.nil?
+    end
+  end
+
+  CancelOrder = Data.define(:order_id, :reason) do
+    def validate!
+      raise ArgumentError, "reason required" if reason.nil?
+    end
+  end
+
+  # Persistence — which events are stored and how to derive the stream
+  persist events(
+    OrderPlaced,
+    OrderCancelled,
+    stream_id_from: :order_id
+  )
+
+  # Reactions — which handlers fire for each event
+  on OrderPlaced,    execute(ReserveInventory, ChargePayment)
+  on OrderCancelled, execute(RefundPayment)
+
+  # Facade — clean public interface, no TCB details leak out
+  def self.place(order_id:, customer:)
+    TCB.execute(PlaceOrder.new(order_id: order_id, customer: customer))
+  end
+
+  def self.cancel(order_id:, reason:)
+    TCB.execute(CancelOrder.new(order_id: order_id, reason: reason))
+  end
+end
+```
+
+Callers interact with the domain through the facade — no infrastructure details leak out:
+
+```ruby
+Orders.place(order_id: 42, customer: "Alice")
+Orders.cancel(order_id: 42, reason: "changed mind")
+```
+
+### Aggregate
+
+```ruby
+# app/domain/orders/order.rb
+module Orders
+  class Order
+    include TCB::RecordsEvents
+
+    attr_reader :id
+
+    def initialize(id:) = @id = id
+
+    def place(customer:)
+      record OrderPlaced.new(order_id: id, customer: customer)
+    end
+
+    def cancel(reason:)
+      record OrderCancelled.new(order_id: id, reason: reason)
+    end
+  end
+end
+```
+
+### Command handler
+
+```ruby
+# app/domain/orders/place_order_handler.rb
+module Orders
+  class PlaceOrderHandler
+    def call(command)
+      order = Order.new(id: command.order_id)
+
+      events = TCB.record(aggregates: [order], within: ApplicationRecord) do
+        order.place(customer: command.customer)
+      end
+
+      TCB.publish(*events)
+    end
+  end
+end
+```
+
+**Persistence always happens before publishing.** If an exception is raised inside the block, no events are persisted and none are published.
+
+---
+
+## Configuration
+
+Each domain module maps to its own database table, keeping domains isolated:
+
+| Module | Table |
+|---|---|
+| `Orders` | `orders_events` |
+| `Payments` | `payments_events` |
+| `Payments::Charges` | `payments_charges_events` |
+
+```ruby
+TCB.configure do |c|
+  c.event_bus      = TCB::EventBus.new
+  c.event_store    = TCB::EventStore::ActiveRecord.new
+  c.event_handlers = [Orders, Payments]
+
+  # Optional: additional classes for YAML serialization
+  c.extra_serialization_classes = [ActiveSupport::TimeWithZone, Money]
+end
+```
+
+---
+
+## Reading Events
+
+```ruby
+# All events for an aggregate
+TCB.read(Orders).stream(42).to_a
+
+# Version filters
+TCB.read(Orders).stream(42).from_version(5).to_a
+TCB.read(Orders).stream(42).to_version(20).to_a
+TCB.read(Orders).stream(42).between_versions(5, 20).to_a
+
+# Time filter
+TCB.read(Orders).stream(42).occurred_after(1.week.ago).to_a
+
+# Last N events (oldest first)
+TCB.read(Orders).stream(42).last(10)
+
+# Batch processing — keyset pagination, memory safe
+TCB.read(Orders).stream(42).in_batches(of: 100) do |batch|
+  batch.each { |envelope| replay(envelope.event) }
+end
+
+# With version bounds
+TCB.read(Orders).stream(42).in_batches(of: 100, from_version: 50, to_version: 200) do |batch|
+  # ...
+end
+```
+
+Each result is a `TCB::Envelope`:
+
+```ruby
+envelope.event        # the domain event
+envelope.event_id     # UUID string
+envelope.stream_id    # "context|aggregate_id"
+envelope.version      # integer, sequential per stream
+envelope.occurred_at  # Time
+```
+
+---
+
+## Event Store Adapters
+
+### In-Memory (for tests)
+
+```ruby
+TCB::EventStore::InMemory.new
+```
+
+### ActiveRecord — YAML (text column, all databases including SQLite)
+
+```ruby
+TCB::EventStore::ActiveRecord.new
+```
+
+Generate migration and AR model:
+
+```
+bin/rails generate tcb:event_store orders
+```
+
+### ActiveRecord JSON (jsonb column, Postgres)
+
+```ruby
+TCB::EventStore::ActiveRecordJson.new
+```
+
+```
+bin/rails generate tcb:event_store:jsonb orders
+```
+
+---
+
+## Error Handling
+
+Failed handlers emit a `TCB::SubscriberInvocationFailed` event:
+
+```ruby
+TCB.config.event_bus.subscribe(TCB::SubscriberInvocationFailed) do |failure|
+  Rails.logger.error "#{failure.error_class}: #{failure.error_message}"
+  Rails.logger.error failure.error_backtrace.join("\n")
+end
+```
+
+---
+
+## Graceful Shutdown
+
+```ruby
+bus = TCB::EventBus.new(
+  handle_signals: true,   # trap TERM and INT automatically
+  shutdown_timeout: 30.0
+)
+
+# Or manually
+bus.shutdown(drain: true, timeout: 30.0)
+bus.force_shutdown
+```
+
+---
+
+## Testing
+
+Use `TCB::EventStore::InMemory` in tests. For async assertions use `PollAssert`:
+
+```ruby
+include PollAssert
+
+poll_assert("handler was called") { CALLED.include?(:reserve_inventory) }
+```
+
+---
+
+## Why `Data.define`
+
+TCB uses Ruby's `Data.define` for events and commands throughout. This is a deliberate architectural choice, not a convention.
+
+TCB embraces data coupling by design — events carry only data, never behavior. This enables a reactive architecture where domain modules respond to facts rather than calling each other directly, keeping your codebase decoupled and easy to reason about.
+
+**Immutability.** Events are facts — they cannot be changed after they happen. `Data.define` enforces this at the language level. There is no way to accidentally mutate an event in a handler.
+
+**Explicit data coupling.** When you define `OrderPlaced = Data.define(:order_id, :customer)`, the attributes are the contract. Anyone reading the code sees exactly what an `OrderPlaced` event carries — no hidden state, no methods that obscure the data shape.
+
+**Value semantics.** Two `OrderPlaced` events with the same attributes are equal. This makes testing straightforward — no mocks, no stubs, just plain equality assertions.
+
+**No inheritance tax.** `Data.define` requires no base class, no framework module. Your domain events are pure Ruby — they can be used anywhere without pulling TCB along.
+
+---
 
 ## Development
 
-After checking out the repo, run `bundle install` to install dependencies. Then, run `rake test` to run the tests.
+After checking out the repo, run `bundle install` to install dependencies. Then run `rake test` to run the tests.
 
 ## Contributing
 
-Bug reports and pull requests are welcome.
+Bug reports and pull requests are welcome on GitHub at https://github.com/tcb-si/tcb.
 
 ## License
 
