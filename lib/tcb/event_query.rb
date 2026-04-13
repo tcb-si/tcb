@@ -59,15 +59,49 @@ module TCB
       )
     end
 
-    def to_a
+    def last(count)
       return [] unless @stream_id
 
-      @store.read(
+      result = @store.read(
         @stream_id,
         from_version: @from_version,
         to_version: @to_version,
-        occurred_after: @occurred_after
+        occurred_after: @occurred_after,
+        limit: count,
+        order: :desc
       )
+      result.reverse
+    end
+
+    def in_batches(of: 1000, from_version: nil, to_version: nil)
+      return enum_for(:in_batches, of: of, from_version: from_version, to_version: to_version) unless block_given?
+
+      cursor = from_version || @from_version
+      ceiling = to_version || @to_version
+
+      loop do
+        batch = @store.read(
+          @stream_id,
+          from_version: cursor,
+          to_version: ceiling,
+          occurred_after: @occurred_after,
+          limit: of
+        )
+
+        break if batch.empty?
+
+        yield batch
+
+        break if batch.size < of
+
+        cursor = batch.last.version + 1
+      end
+    end
+
+    def to_a
+      result = []
+      in_batches { |batch| result.push(*batch) }
+      result
     end
   end
 end

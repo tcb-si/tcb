@@ -127,5 +127,36 @@ module TCB
 
       refute_same base, filtered
     end
+
+    # Test: last returns last n envelopes in ASC order
+    def test_last_returns_last_n_envelopes
+      envelopes = TCB.read(Orders).stream(42).last(1)
+
+      assert_equal 1, envelopes.size
+      assert_equal 2, envelopes.first.version
+      assert_instance_of PaymentProcessed, envelopes.first.event
+    end
+
+    # Test: last returns all when count exceeds stream size
+    def test_last_returns_all_when_count_exceeds_stream
+      envelopes = TCB.read(Orders).stream(42).last(100)
+
+      assert_equal 2, envelopes.size
+      assert_equal 1, envelopes.first.version
+      assert_equal 2, envelopes.last.version
+    end
+
+    # Test: last returns envelopes in ASC order
+    def test_last_returns_envelopes_in_asc_order
+      envelopes = TCB.read(Orders).stream(42).last(2)
+
+      assert_equal [1, 2], envelopes.map(&:version)
+    end
+
+    # Test: last on empty stream returns []
+    def test_last_on_empty_stream_returns_empty
+      envelopes = TCB.read(Orders).stream(999).last(10)
+      assert_equal [], envelopes
+    end
   end
 end
