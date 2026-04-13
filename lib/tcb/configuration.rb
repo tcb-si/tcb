@@ -68,12 +68,22 @@ module TCB
 
     def flush_persist_registrations
       @persist_registrations = []
-      @event_handlers.each do |mod|
-        context = StreamId.context_from_module(mod)
-        mod.persist_registrations.each do |registration|
+      @event_handlers.each do |domain_module|
+        context = DomainContext.from_module(domain_module).to_s
+        domain_module.persist_registrations.each do |registration|
           @persist_registrations << registration.with(context: context)
         end
+        define_event_record_for(domain_module) if domain_module.persist_registrations.any?
       end
+    end
+
+    def define_event_record_for(domain_module)
+      return if domain_module.const_defined?(:EventRecord, false)
+
+      klass = Class.new(::ActiveRecord::Base) do
+        self.table_name = DomainContext.from_module(domain_module).table_name
+      end
+      domain_module.const_set(:EventRecord, klass)
     end
   end
 
