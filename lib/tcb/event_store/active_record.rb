@@ -38,12 +38,13 @@ module TCB
         end
       end
 
-      def read(stream_id, after_version: nil, occurred_after: nil)
+      def read(stream_id, from_version: nil, to_version: nil, occurred_after: nil)
         scope = event_record_for(stream_id)
           .where(stream_id: stream_id)
           .order(:version)
 
-        scope = scope.where("version > ?", after_version)   if after_version
+        scope = scope.where("version >= ?", from_version) if from_version
+        scope = scope.where("version <= ?", to_version) if to_version
         scope = scope.where("occurred_at > ?", occurred_after) if occurred_after
 
         scope.map do |record|

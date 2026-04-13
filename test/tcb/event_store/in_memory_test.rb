@@ -96,13 +96,13 @@ module TCB
       assert_equal [1, 2], envelopes.map(&:version)
     end
 
-    def test_read_after_version_returns_subsequent_events
+    def test_read_from_version_returns_subsequent_events
       @store.append(stream_id: "orders|42", events: [
         OrderPlaced.new(order_id: 42, total: 100.0),
         PaymentProcessed.new(order_id: 42, amount: 100.0),
         UserRegistered.new(id: 1, email: "test@example.com")
       ])
-      envelopes = @store.read("orders|42", after_version: 1)
+      envelopes = @store.read("orders|42", from_version: 2)
       assert_equal 2, envelopes.size
       assert_equal [2, 3], envelopes.map(&:version)
     end

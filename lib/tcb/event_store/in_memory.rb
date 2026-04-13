@@ -26,9 +26,10 @@ module TCB
         end
       end
 
-      def read(stream_id, after_version: nil, occurred_after: nil)
+      def read(stream_id, from_version: nil, to_version: nil, occurred_after: nil)
         @mutex.synchronize { @streams[stream_id].dup }
-          .then { |e| after_version  ? e.select { |env| env.version > after_version }   : e }
+          .then { |e| from_version ? e.select { |env| env.version >= from_version } : e }
+          .then { |e| to_version ? e.select { |env| env.version <= to_version } : e }
           .then { |e| occurred_after ? e.select { |env| env.occurred_at > occurred_after } : e }
       end
 

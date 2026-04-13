@@ -2,11 +2,12 @@
 
 module TCB
   class EventQuery
-    def initialize(store:, context:, stream_id: nil, after_version: nil, occurred_after: nil)
+    def initialize(store:, context:, stream_id: nil, from_version: nil, to_version: nil, occurred_after: nil)
       @store = store
       @context = context
       @stream_id = stream_id
-      @after_version = after_version
+      @from_version = from_version
+      @to_version = to_version
       @occurred_after = occurred_after
     end
 
@@ -15,19 +16,36 @@ module TCB
         store: @store,
         context: @context,
         stream_id: StreamId.build(@context, aggregate_id).to_s,
-        after_version: @after_version,
+        from_version: @from_version,
+        to_version: @to_version,
         occurred_after: @occurred_after
       )
     end
 
-    def after_version(version)
+    def from_version(version)
       self.class.new(
         store: @store,
         context: @context,
         stream_id: @stream_id,
-        after_version: version,
+        from_version: version,
+        to_version: @to_version,
         occurred_after: @occurred_after
       )
+    end
+
+    def to_version(version)
+      self.class.new(
+        store: @store,
+        context: @context,
+        stream_id: @stream_id,
+        from_version: @from_version,
+        to_version: version,
+        occurred_after: @occurred_after
+      )
+    end
+
+    def between_versions(from, to)
+      from_version(from).to_version(to)
     end
 
     def occurred_after(time)
@@ -35,7 +53,8 @@ module TCB
         store: @store,
         context: @context,
         stream_id: @stream_id,
-        after_version: @after_version,
+        from_version: @from_version,
+        to_version: @to_version,
         occurred_after: time
       )
     end
@@ -45,7 +64,8 @@ module TCB
 
       @store.read(
         @stream_id,
-        after_version: @after_version,
+        from_version: @from_version,
+        to_version: @to_version,
         occurred_after: @occurred_after
       )
     end

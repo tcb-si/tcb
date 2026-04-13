@@ -72,13 +72,22 @@ module TCB
       assert_equal 99, envelopes.first.event.order_id
     end
 
-    # Test: .after_version filters envelopes
-    def test_after_version_filters_envelopes
-      envelopes = TCB.read(Orders).stream(42).after_version(1).to_a
+    # Test: .from_version filters envelopes
+    def test_from_version_filters_envelopes
+      envelopes = TCB.read(Orders).stream(42).from_version(2).to_a
 
       assert_equal 1, envelopes.size
       assert_equal 2, envelopes.first.version
       assert_instance_of PaymentProcessed, envelopes.first.event
+    end
+
+    # Test: .to_version filters envelopes
+    def test_to_version_filters_envelopes
+      envelopes = TCB.read(Orders).stream(42).to_version(1).to_a
+
+      assert_equal 1, envelopes.size
+      assert_equal 1, envelopes.first.version
+      assert_instance_of OrderPlaced, envelopes.first.event
     end
 
     # Test: .occurred_after filters envelopes
@@ -95,11 +104,11 @@ module TCB
       assert_instance_of PaymentProcessed, envelopes.first.event
     end
 
-    # Test: .after_version and .occurred_after can be chained
-    def test_after_version_and_occurred_after_can_be_chained
+    # Test: .from_version and .occurred_after can be chained
+    def test_from_version_and_occurred_after_can_be_chained
       t_past = Time.now - 100
 
-      envelopes = TCB.read(Orders).stream(42).after_version(0).occurred_after(t_past).to_a
+      envelopes = TCB.read(Orders).stream(42).from_version(0).occurred_after(t_past).to_a
 
       assert_equal 2, envelopes.size
     end
@@ -114,7 +123,7 @@ module TCB
     # Test: filters return new query instances (immutable)
     def test_filters_return_new_query_instances
       base     = TCB.read(Orders).stream(42)
-      filtered = base.after_version(1)
+      filtered = base.from_version(1)
 
       refute_same base, filtered
     end
