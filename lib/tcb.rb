@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "tcb/event_store/active_record"
+require_relative "tcb/event_query"
 require_relative "tcb/event_store/event_stream_envelope"
 require_relative "tcb/event_store/in_memory"
 require_relative "tcb/stream_id"
@@ -17,6 +19,8 @@ require_relative "tcb/event_bus"
 module TCB
   VERSION = "0.4.56"
 
+  Envelope = EventStore::EventStreamEnvelope
+
   def self.record(aggregates:, within: nil, &block)
     Record.call(
       aggregates:   aggregates,
@@ -24,6 +28,13 @@ module TCB
       store:        config.event_store,
       registrations: config.persist_registrations,
       &block
+    )
+  end
+
+  def self.read(domain_module)
+    EventQuery.new(
+      store: config.event_store,
+      context: StreamId.context_from_module(domain_module)
     )
   end
 end

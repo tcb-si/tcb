@@ -36,6 +36,22 @@ module TCB
       @event_handlers || []
     end
 
+    def extra_serialization_classes=(classes)
+      @extra_serialization_classes = classes
+    end
+
+    def extra_serialization_classes
+      @extra_serialization_classes || []
+    end
+
+    def permitted_serialization_classes
+      @permitted_serialization_classes ||= [
+        Symbol, Time, Date, BigDecimal,
+        *persist_registrations.flat_map(&:event_classes),
+        *extra_serialization_classes
+      ]
+    end
+
     private
 
     def flush_event_handlers
@@ -63,6 +79,7 @@ module TCB
 
   def self.configure
     yield config
+    config.permitted_serialization_classes
     config.freeze
   end
 

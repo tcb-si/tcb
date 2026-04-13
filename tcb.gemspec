@@ -22,6 +22,8 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   # Development dependencies
+  spec.add_development_dependency "activerecord", "~> 8.1"
+  spec.add_development_dependency "sqlite3", "~> 2.9"
   spec.add_development_dependency "minitest", "~> 5.0"
   spec.add_development_dependency "rake", "~> 13.0"
   spec.add_development_dependency "minitest-reporters", "~> 1.7.1"
