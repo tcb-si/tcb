@@ -31,7 +31,7 @@ module TCB
       subscriptions.each { |sub| TCB.config.event_bus.unsubscribe(sub) }
     end
 
-    def poll_assert(message = nil, within: 1.0, interval: 0.005, &block)
+    def poll_assert(message = nil, within: 1.0, interval: 0.001, &block)
       deadline = Time.now + within
 
       loop do
