@@ -4,12 +4,13 @@ require 'set'
 require_relative 'event_bus/running_strategy'
 require_relative 'event_bus/shutdown_strategy'
 require_relative 'event_bus/termination_signal_handler'
+require_relative 'event_bus/subscriber_registry'
 
 module TCB
   class EventBus
     class ShutdownError < StandardError; end
 
-    attr_reader :queue, :subscribers, :subscriber_metadata, :mutex,
+    attr_reader :queue, :registry, :mutex,
                 :active_dispatches, :dispatcher, :events_processed_during_shutdown
 
     def initialize(
@@ -19,8 +20,7 @@ module TCB
       on_signal: nil
     )
       @queue = Queue.new
-      @subscribers = Hash.new { |h, k| h[k] = Set.new }
-      @subscriber_metadata = {}
+      @registry = SubscriberRegistry.new
       @mutex = Mutex.new
       @active_dispatches = 0
       @events_processed_during_shutdown = 0
@@ -31,7 +31,6 @@ module TCB
           event = @queue.pop
           break if event == :shutdown_sentinel
 
-          # Dispatch directly in this thread (no wrapper thread)
           dispatch(event)
         end
       end
@@ -50,6 +49,11 @@ module TCB
     # Subscribe to a specific event class
     def subscribe(event_class, &block)
       @execution_strategy.subscribe(event_class, &block)
+    end
+
+    # Unsubscribe using a subscription token
+    def unsubscribe(subscription)
+      @registry.remove(subscription)
     end
 
     # Publish an event instance
@@ -82,9 +86,8 @@ module TCB
       @mutex.synchronize { @active_dispatches += 1 }
 
       @events_processed_during_shutdown += 1 if shutdown?
-      handlers = @mutex.synchronize { @subscribers[event.class].dup }
+      handlers = @registry.handlers_for(event.class)
 
-      # Execute handlers sequentially in the dispatcher thread
       handlers.each do |handler|
         execute_handler(handler, event)
       end
@@ -97,18 +100,14 @@ module TCB
     def execute_handler(handler, event)
       handler.call(event)
     rescue => e
-      # Don't publish SubscriberInvocationFailed if we're already handling one
-      # This prevents infinite loops
       return if event.is_a?(SubscriberInvocationFailed)
 
-      # Use the builder to create failure event
       failure_event = SubscriberInvocationFailed.build(
         handler: handler,
         original_event: event,
         error: e
       )
 
-      # During shutdown, dispatch directly instead of queueing
       if shutdown?
         dispatch(failure_event)
       else

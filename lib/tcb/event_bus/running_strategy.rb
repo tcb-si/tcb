@@ -13,17 +13,7 @@ module TCB
       end
 
       def subscribe(event_class, &block)
-        @event_bus.mutex.synchronize do
-          @event_bus.subscribers[event_class].add(block)
-          # Store metadata for this handler
-          metadata = SubscriberMetadataExtractor.new(block).extract
-          @event_bus.subscriber_metadata[block.object_id] = {
-            subscriber_type: metadata.subscriber_type,
-            subscriber_class: metadata.subscriber_class,
-            subscriber_location: metadata.subscriber_location,
-            subscriber_source: metadata.subscriber_source
-          }
-        end
+        @event_bus.registry.add(event_class, block)
       end
 
       def shutdown?
