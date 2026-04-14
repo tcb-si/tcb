@@ -5,6 +5,7 @@ require_relative "../shared/command_argument"
 module TCB
   module Generators
     class DomainGenerator < Rails::Generators::Base
+      namespace "TCB:domain"
       source_root File.expand_path("templates", __dir__)
 
       argument :module_name, type: :string

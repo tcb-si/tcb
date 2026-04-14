@@ -5,6 +5,7 @@ require_relative "../shared/command_argument"
 module TCB
   module Generators
     class EventStoreGenerator < Rails::Generators::Base
+      namespace "TCB:event_store"
       source_root File.expand_path("templates", __dir__)
 
       argument :module_name, type: :string
