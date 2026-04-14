@@ -158,5 +158,26 @@ module TCB
       envelopes = TCB.read(Orders).stream(999).last(10)
       assert_equal [], envelopes
     end
+
+    # Test: last respects from_version
+    def test_last_respects_from_version
+      envelopes = TCB.read(Orders).stream(42).from_version(2).last(10)
+      assert_equal 1, envelopes.size
+      assert_equal 2, envelopes.first.version
+    end
+
+    # Test: last respects to_version
+    def test_last_respects_to_version
+      envelopes = TCB.read(Orders).stream(42).to_version(1).last(10)
+      assert_equal 1, envelopes.size
+      assert_equal 1, envelopes.first.version
+    end
+
+    # Test: last respects between_versions
+    def test_last_respects_between_versions
+      envelopes = TCB.read(Orders).stream(42).between_versions(1, 2).last(1)
+      assert_equal 1, envelopes.size
+      assert_equal 2, envelopes.first.version
+    end
   end
 end
