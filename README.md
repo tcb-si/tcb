@@ -402,9 +402,9 @@ bus.force_shutdown
 
 Use `TCB::EventStore::InMemory` in tests.
 
-### TCB::MinitestHelpers
+### Minitest
 
-Include `TCB::MinitestHelpers` in your test class for two helpers: `assert_published` and `poll_assert`.
+Include `TCB::MinitestHelpers` in your test class:
 
 ```ruby
 class OrdersTest < Minitest::Test
@@ -425,43 +425,46 @@ class OrdersTest < Minitest::Test
 end
 ```
 
-### assert_published
-
-Verifies that an event was published to the bus during the block. Pass an event class to assert any event of that type, or an instance to assert an exact value match:
+#### assert_published
 
 ```ruby
-assert_published(Orders::OrderPlaced) do
-  Orders.place(order_id: 42, customer: "Alice")
-end
-
-assert_published(Orders::OrderPlaced.new(order_id: 42, customer: "Alice")) do
-  Orders.place(order_id: 42, customer: "Alice")
-end
-
-# Multiple events
-assert_published(Orders::OrderPlaced, Notifications::WelcomeEmailQueued) do
-  Orders.place(order_id: 42, customer: "Alice")
-end
-```
-
-The `within:` keyword sets the polling timeout (default `1.0` seconds):
-
-```ruby
+assert_published(Orders::OrderPlaced) { Orders.place(order_id: 42, customer: "Alice") }
+assert_published(Orders::OrderPlaced.new(order_id: 42, customer: "Alice")) { Orders.place(...) }
+assert_published(Orders::OrderPlaced, Notifications::WelcomeEmailQueued) { Orders.place(...) }
 assert_published(Orders::OrderPlaced, within: 0.5) { Orders.place(...) }
 ```
 
-Subscriptions are always cleaned up after the assertion — even if it fails.
-
-### poll_assert
-
-For lower-level async assertions:
+#### poll_assert
 
 ```ruby
 poll_assert("handler was called") { CALLED.include?(:reserve_inventory) }
 poll_assert("payment processed", within: 2.0) { Payment.completed? }
 ```
 
-Raises `Minitest::Assertion` if the condition is not met within the timeout.
+### RSpec (experimental)
+
+Include `TCB::RSpecHelpers` in your spec:
+
+```ruby
+RSpec.configure do |config|
+  config.include TCB::RSpecHelpers
+end
+```
+
+#### have_published
+
+```ruby
+expect { Orders.place(order_id: 42, customer: "Alice") }.to have_published(Orders::OrderPlaced)
+expect { Orders.place(...) }.to have_published(Orders::OrderPlaced.new(order_id: 42, customer: "Alice"))
+expect { Orders.place(...) }.to have_published(Orders::OrderPlaced, within: 0.5)
+```
+
+#### poll_match
+
+```ruby
+expect { CALLED.include?(:reserve_inventory) }.to poll_match
+expect { Payment.completed? }.to poll_match(within: 2.0)
+```
 
 ---
 
