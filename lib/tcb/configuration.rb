@@ -55,8 +55,8 @@ module TCB
     private
 
     def flush_event_handlers
-      @event_handlers.each do |mod|
-        mod.event_handler_registrations.each do |registration|
+      @event_handlers.each do |domain_module|
+        domain_module.event_handler_registrations.each do |registration|
           registration.handlers.each do |handler|
             event_bus.subscribe(registration.event_class) do |event|
               handler.new.call(event)
