@@ -14,7 +14,6 @@ Gem::Specification.new do |spec|
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.2.0"
 
-  spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = spec.homepage
   spec.metadata["changelog_uri"] = "#{spec.homepage}/blob/main/CHANGELOG.md"
 
@@ -22,8 +21,8 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   # Development dependencies
-  spec.add_development_dependency "railties"
-  spec.add_development_dependency "activerecord"
+  spec.add_development_dependency "railties", "~> 8.0"
+  spec.add_development_dependency "activerecord", "~> 8.0"
   spec.add_development_dependency "sqlite3", "~> 2.9"
   spec.add_development_dependency "minitest", "~> 5.0"
   spec.add_development_dependency "rake", "~> 13.0"

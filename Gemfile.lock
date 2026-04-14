@@ -139,11 +139,11 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  activerecord
+  activerecord (~> 8.0)
   debug (~> 1.9.2)
   minitest (~> 5.0)
   minitest-reporters (~> 1.7.1)
-  railties
+  railties (~> 8.0)
   rake (~> 13.0)
   sqlite3 (~> 2.9)
   tcb!
