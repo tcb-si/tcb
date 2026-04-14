@@ -1,10 +1,9 @@
-# test/generators/tcb/install_generator_test.rb
 require "test_helper"
 require "rails/generators/testing/behavior"
 require "rails/generators/testing/assertions"
 require "generators/tcb/install/install_generator"
 
-module Tcb
+module TCB
   module Generators
     class InstallGeneratorTest < Rails::Generators::TestCase
       tests InstallGenerator

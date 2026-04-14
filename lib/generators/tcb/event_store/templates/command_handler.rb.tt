@@ -1,0 +1,18 @@
+module <%= module_class_name %>
+  class <%= current_command.handler_class_name %>
+    def call(command)
+<% if comments? %>
+      # 1. Load or build your aggregate
+      # order = Order.new(id: command.order_id)
+
+      # 2. TCB.record collects events and persists them within a transaction
+      # events = TCB.record(aggregates: [order], within: ApplicationRecord) do
+      #   order.place(...)
+      # end
+
+      # 3. TCB.publish dispatches events to subscribers
+      # TCB.publish(*events)
+<% end %>
+    end
+  end
+end

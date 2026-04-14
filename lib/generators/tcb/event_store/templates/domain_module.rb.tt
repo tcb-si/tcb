@@ -1,0 +1,38 @@
+module <%= module_class_name %>
+  include TCB::HandlesEvents
+<% if comments? %>
+
+  # Events — past tense, immutable facts
+  # OrderPlaced = Data.define(:order_id)
+<% end %>
+<% parsed_commands.each do |cmd| %>
+
+  <%= cmd.command_class_name %> = Data.define(<%= cmd.attrs.map { |a| ":#{a}" }.join(", ") %>) do
+    def validate!
+<% cmd.attrs.each do |attr| %>
+      raise ArgumentError, "<%= attr %> is required" if <%= attr %>.nil?
+<% end %>
+    end
+  end
+<% end %>
+<% if comments? %>
+
+  # Persistence — declare which events to store, and how to derive the stream id.
+  # Stream id is derived from an attribute on the event (stream_id_from:).
+  # Events are persisted by TCB.record in your command handlers (see below).
+  # persist events(
+  #   EventClass,
+  #   stream_id_from: :aggregate_id_attribute
+  # )
+
+  # Reactions — handlers are called asynchronously when events are published.
+  # on EventClass, execute(HandlerClass)
+<% end %>
+
+  # Facade
+<% parsed_commands.each do |cmd| %>
+  def self.<%= cmd.name %>(<%= cmd.attrs.map { |a| "#{a}:" }.join(", ") %>)
+    TCB.execute(<%= cmd.command_class_name %>.new(<%= cmd.attrs.map { |a| "#{a}: #{a}" }.join(", ") %>))
+  end
+<% end %>
+end
