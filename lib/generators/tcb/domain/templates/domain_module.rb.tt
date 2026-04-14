@@ -1,0 +1,30 @@
+module <%= module_class_name %>
+  include TCB::HandlesEvents
+<% if comments? %>
+
+  # Events — past tense, immutable facts from other domains or this module
+  # UserRegistered = Data.define(:user_id, :email)
+<% end %>
+<% parsed_commands.each do |cmd| %>
+
+  <%= cmd.command_class_name %> = Data.define(<%= cmd.attrs.map { |a| ":#{a}" }.join(", ") %>) do
+    def validate!
+<% cmd.attrs.each do |attr| %>
+      raise ArgumentError, "<%= attr %> is required" if <%= attr %>.nil?
+<% end %>
+    end
+  end
+<% end %>
+<% if comments? %>
+
+  # Reactions — handlers are called asynchronously when events are published.
+  # on EventClass, execute(HandlerClass)
+<% end %>
+
+  # Facade
+<% parsed_commands.each do |cmd| %>
+  def self.<%= cmd.name %>(<%= cmd.attrs.map { |a| "#{a}:" }.join(", ") %>)
+    TCB.publish(<%= cmd.command_class_name %>.new(<%= cmd.attrs.map { |a| "#{a}: #{a}" }.join(", ") %>))
+  end
+<% end %>
+end

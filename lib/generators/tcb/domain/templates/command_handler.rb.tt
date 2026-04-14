@@ -1,0 +1,11 @@
+module <%= module_class_name %>
+  class <%= current_command.handler_class_name %>
+    def call(command)
+<% if comments? %>
+      # Perform the side effect and publish an event when done.
+      # WelcomeMailer.with(email: command.email).deliver_later
+      # TCB.publish(WelcomeEmailSent.new(user_id: command.user_id))
+<% end %>
+    end
+  end
+end
