@@ -44,7 +44,11 @@ bus.publish(UserRegistered.new(id: 1, email: "alice@example.com"))
 
 ### Class handlers with `TCB::HandlesEvents`
 
-For more structure, declare handlers in a module. This works independently of aggregates and persistence — you can use `HandlesEvents` purely as a pub/sub mechanism:
+TCB is designed around a single architectural principle: a domain module should be understandable at a glance. Events, commands, persistence rules, and reactions belong together — not scattered across initializers, config files, and handler registries.
+
+`TCB::HandlesEvents` is how you express reactions close to the domain. When you open `orders.rb`, you see exactly what happens when an `OrderPlaced` event is raised — no indirection, no magic, no hunting through config. The domain speaks for itself.
+
+This works independently of aggregates and persistence — you can use `HandlesEvents` purely as a pub/sub mechanism:
 
 ```ruby
 module Notifications
@@ -304,14 +308,64 @@ Generate migration and AR model:
 bin/rails generate tcb:event_store orders
 ```
 
-### ActiveRecord JSON (jsonb column, Postgres)
+---
+
+## Generators
+
+TCB includes generators to scaffold domain modules, command handlers, and migrations.
+
+### Install
+
+```bash
+rails generate tcb:install
+```
+
+Creates `config/initializers/tcb.rb` with a minimal configuration template.
+
+---
+
+### Domain module with event store
+
+```bash
+rails generate tcb:event_store orders place_order:order_id,customer cancel_order:order_id,reason
+```
+
+Generates:
+- `app/domain/orders.rb` — domain module with commands, persistence placeholder, reactions placeholder, and facade
+- `app/domain/orders/place_order_handler.rb` — command handler with `TCB.record` / `TCB.publish` scaffold
+- `app/domain/orders/cancel_order_handler.rb`
+- `db/migrate/TIMESTAMP_create_orders_events.rb`
+
+---
+
+### Domain module without persistence (pub/sub only)
+
+```bash
+rails generate tcb:domain notifications send_welcome_email:user_id,email send_verification_sms:user_id,phone
+```
+
+Generates:
+- `app/domain/notifications.rb` — domain module with commands, reactions placeholder, and facade using `TCB.publish`
+- `app/domain/notifications/send_welcome_email_handler.rb`
+- `app/domain/notifications/send_verification_sms_handler.rb`
+
+---
+
+### Options
+
+| Flag | Description |
+|---|---|
+| `--skip-domain` | Skip domain module and handlers |
+| `--skip-migration` | Skip migration (event_store only) |
+| `--no-comments` | Generate without inline guidance comments |
+
+After generating, add your module to `config/initializers/tcb.rb`. This is the only place TCB needs to know about your domain modules — all reactions, persistence rules, and handler mappings are declared inside the module itself, not here:
 
 ```ruby
-TCB::EventStore::ActiveRecordJson.new
-```
-
-```
-bin/rails generate tcb:event_store:jsonb orders
+c.event_handlers = [
+  Orders,
+  Notifications,
+]
 ```
 
 ---
