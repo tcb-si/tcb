@@ -400,13 +400,68 @@ bus.force_shutdown
 
 ## Testing
 
-Use `TCB::EventStore::InMemory` in tests. For async assertions use `PollAssert`:
+Use `TCB::EventStore::InMemory` in tests.
+
+### TCB::TestHelpers
+
+Include `TCB::TestHelpers` in your test class for two helpers: `assert_published` and `poll_assert`.
 
 ```ruby
-include PollAssert
+class OrdersTest < Minitest::Test
+  include TCB::TestHelpers
 
-poll_assert("handler was called") { CALLED.include?(:reserve_inventory) }
+  def setup
+    TCB.configure do |c|
+      c.event_bus   = TCB::EventBus.new
+      c.event_store = TCB::EventStore::InMemory.new
+      c.event_handlers = [Orders]
+    end
+  end
+
+  def teardown
+    TCB.config.event_bus.force_shutdown
+    TCB.instance_variable_set(:@config, nil)
+  end
+end
 ```
+
+### assert_published
+
+Verifies that an event was published to the bus during the block. Pass an event class to assert any event of that type, or an instance to assert an exact value match:
+
+```ruby
+assert_published(Orders::OrderPlaced) do
+  Orders.place(order_id: 42, customer: "Alice")
+end
+
+assert_published(Orders::OrderPlaced.new(order_id: 42, customer: "Alice")) do
+  Orders.place(order_id: 42, customer: "Alice")
+end
+
+# Multiple events
+assert_published(Orders::OrderPlaced, Notifications::WelcomeEmailQueued) do
+  Orders.place(order_id: 42, customer: "Alice")
+end
+```
+
+The `within:` keyword sets the polling timeout (default `1.0` seconds):
+
+```ruby
+assert_published(Orders::OrderPlaced, within: 0.5) { Orders.place(...) }
+```
+
+Subscriptions are always cleaned up after the assertion — even if it fails.
+
+### poll_assert
+
+For lower-level async assertions:
+
+```ruby
+poll_assert("handler was called") { CALLED.include?(:reserve_inventory) }
+poll_assert("payment processed", within: 2.0) { Payment.completed? }
+```
+
+Raises `Minitest::Assertion` if the condition is not met within the timeout.
 
 ---
 
