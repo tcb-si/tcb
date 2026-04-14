@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "tcb/test_helpers"
+require_relative "tcb/minitest_helpers"
 require_relative "tcb/domain_context"
 require_relative "tcb/event_query"
 require_relative "tcb/event_store/active_record"

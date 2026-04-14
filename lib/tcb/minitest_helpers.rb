@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module TCB
-  module TestHelpers
+  module MinitestHelpers
     def assert_published(*expected, within: 1.0, &block)
       captured = Hash.new { |h, k| h[k] = [] }
       subscriptions = []

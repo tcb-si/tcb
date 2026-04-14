@@ -4,7 +4,7 @@ require_relative '../test_helper'
 
 module TCB
   class TestHelpersTest < Minitest::Test
-    include TCB::TestHelpers
+    include TCB::MinitestHelpers
 
     def setup
       config = TCB::Configuration.new

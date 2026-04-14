@@ -402,13 +402,13 @@ bus.force_shutdown
 
 Use `TCB::EventStore::InMemory` in tests.
 
-### TCB::TestHelpers
+### TCB::MinitestHelpers
 
-Include `TCB::TestHelpers` in your test class for two helpers: `assert_published` and `poll_assert`.
+Include `TCB::MinitestHelpers` in your test class for two helpers: `assert_published` and `poll_assert`.
 
 ```ruby
 class OrdersTest < Minitest::Test
-  include TCB::TestHelpers
+  include TCB::MinitestHelpers
 
   def setup
     TCB.configure do |c|

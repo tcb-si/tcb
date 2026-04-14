@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module EventBusDSL
-  include TCB::TestHelpers
+  include TCB::MinitestHelpers
   attr_reader :event_bus
 
   # Setup & Initialization
