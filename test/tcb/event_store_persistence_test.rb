@@ -2,8 +2,7 @@ require_relative '../test_helper'
 
 module TCB
   class EventStorePersistenceTest < Minitest::Test
-    include PollAssert
-
+    include TCB::TestHelpers
     OrderCancelled = Data.define(:order_id)
 
     module TestOrders

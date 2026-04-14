@@ -2,8 +2,7 @@ require_relative '../test_helper'
 
 module TCB
   class HandlesEventsTest < Minitest::Test
-    include PollAssert
-
+    include TCB::TestHelpers
     # Primitive test double for verifying that handlers are called when events are published.
     CALLED = []
 

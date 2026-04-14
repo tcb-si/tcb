@@ -19,13 +19,11 @@ module TCB
 
       expected.each do |arg|
         if arg.is_a?(Class)
-          wait_until(within) { captured[arg].any? }
-          raise Minitest::Assertion, "Expected #{arg} to be published, but it was not" unless captured[arg].any?
+          poll_assert("#{arg} to be published", within: within) { captured[arg].any? }
         else
           event_class = arg.class
-          wait_until(within) { captured[event_class].any? { |e| e == arg } }
-          unless captured[event_class].any? { |e| e == arg }
-            raise Minitest::Assertion, "Expected #{arg.inspect} to be published, but it was not"
+          poll_assert("#{event_class} matching #{arg.inspect} to be published", within: within) do
+            captured[event_class].any? { |e| e == arg }
           end
         end
       end
@@ -33,13 +31,18 @@ module TCB
       subscriptions.each { |sub| TCB.config.event_bus.unsubscribe(sub) }
     end
 
-    private
+    def poll_assert(message = nil, within: 1.0, interval: 0.005, &block)
+      deadline = Time.now + within
 
-    def wait_until(timeout, interval: 0.05)
-      deadline = Time.now + timeout
       loop do
-        return if yield
-        break if Time.now >= deadline
+        return if block.call
+
+        if Time.now >= deadline
+          failure_message = "Condition not met within #{within}s"
+          failure_message += ": \"#{message}\"" if message
+          raise Minitest::Assertion, failure_message
+        end
+
         sleep interval
       end
     end

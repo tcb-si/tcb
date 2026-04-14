@@ -91,5 +91,44 @@ module TCB
 
       assert_empty TCB.config.event_bus.registry.handlers_for(OrderPlaced)
     end
+
+    # poll_assert
+
+    def test_poll_assert_passes_when_condition_met_immediately
+      assert_silent do
+        poll_assert("condition") { true }
+      end
+    end
+
+    def test_poll_assert_passes_when_condition_met_within_timeout
+      flag = false
+      Thread.new { sleep 0.05; flag = true }
+
+      assert_silent do
+        poll_assert("flag set", within: 0.5) { flag }
+      end
+    end
+
+    def test_poll_assert_fails_when_condition_not_met
+      assert_raises(Minitest::Assertion) do
+        poll_assert("never true", within: 0.05) { false }
+      end
+    end
+
+    def test_poll_assert_failure_message_contains_description
+      error = assert_raises(Minitest::Assertion) do
+        poll_assert("order was placed", within: 0.05) { false }
+      end
+
+      assert_includes error.message, "order was placed"
+    end
+
+    def test_poll_assert_failure_message_contains_timeout
+      error = assert_raises(Minitest::Assertion) do
+        poll_assert("something", within: 0.05) { false }
+      end
+
+      assert_includes error.message, "0.05"
+    end
   end
 end

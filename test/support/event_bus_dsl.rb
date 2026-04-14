@@ -1,10 +1,7 @@
 # frozen_string_literal: true
 
-require_relative "poll_assert"
-
 module EventBusDSL
-  include PollAssert
-
+  include TCB::TestHelpers
   attr_reader :event_bus
 
   # Setup & Initialization
