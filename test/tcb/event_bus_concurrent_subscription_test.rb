@@ -39,15 +39,5 @@ module TCB
         .publish_event(PaymentProcessed.new(order_id: 1, amount: 100.0))
         .assert_handler_called_times(PaymentProcessed, 51)
     end
-
-    # Test: No duplicate handlers when subscribing concurrently with same block
-    def test_no_duplicate_handlers_concurrent_subscription
-      skip "Set deduplication behavior is implementation detail"
-    end
-
-    # Test: Subscribe and unsubscribe concurrently (future feature)
-    def test_concurrent_subscribe_and_unsubscribe
-      skip "Unsubscribe feature not yet implemented"
-    end
   end
 end
