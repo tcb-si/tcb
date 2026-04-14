@@ -4,12 +4,12 @@ require_relative "lib/tcb"
 
 Gem::Specification.new do |spec|
   spec.name = "tcb"
-  spec.version = TCB::VERSION  # Changed from TCB::Events::VERSION
+  spec.version = TCB::VERSION
   spec.authors = ["Ljubomir Marković"]
   spec.email = ["ljubomir@tcb.si"]
 
-  spec.summary = "Event and Command buses for DDD on Rails"
-  spec.description = "Thread-safe event and command buses using pub/sub and command patterns"
+  spec.summary = "Lightweight DDD runtime for Rails — events, commands, and aggregates"
+  spec.description = "TCB gives Rails applications a clean domain language for DDD. Thread-safe event bus, command routing, aggregate pattern, and opt-in event persistence."
   spec.homepage = "https://github.com/tcb-si/tcb"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.2.0"
@@ -18,7 +18,7 @@ Gem::Specification.new do |spec|
   spec.metadata["source_code_uri"] = spec.homepage
   spec.metadata["changelog_uri"] = "#{spec.homepage}/blob/main/CHANGELOG.md"
 
-  spec.files = Dir.glob("lib/**/*") + ["README.md", "LICENSE.txt"]
+  spec.files = Dir.glob("lib/**/*") + ["README.md", "LICENSE.txt", "CHANGELOG.md"]
   spec.require_paths = ["lib"]
 
   # Development dependencies

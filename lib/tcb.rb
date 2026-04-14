@@ -17,10 +17,9 @@ require_relative "tcb/subscriber_metadata_extractor"
 require_relative "tcb/subscriber_invocation_failed"
 require_relative "tcb/event_bus_shutdown"
 require_relative "tcb/event_bus"
+require_relative "tcb/version"
 
 module TCB
-  VERSION = "0.4.56"
-
   Envelope = EventStore::EventStreamEnvelope
 
   def self.record(aggregates:, within: nil, &block)
