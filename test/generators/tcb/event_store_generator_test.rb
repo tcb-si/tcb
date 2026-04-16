@@ -36,7 +36,7 @@ module TCB
         run_generator ["orders"]
         assert_file "app/domain/orders.rb" do |content|
           assert_match "# Persistence", content
-          assert_match "stream_id_from:", content
+          assert_match "stream_id_from_event:", content
         end
       end
 

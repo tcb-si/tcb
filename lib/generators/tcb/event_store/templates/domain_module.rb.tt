@@ -18,11 +18,11 @@ module <%= module_class_name %>
 <% if comments? %>
 
   # Persistence — declare which events to store, and how to derive the stream id.
-  # Stream id is derived from an attribute on the event (stream_id_from:).
+  # Stream id is derived from an attribute on the event (stream_id_from_event:).
   # Events are persisted by TCB.record in your command handlers (see below).
   # persist events(
   #   EventClass,
-  #   stream_id_from: :aggregate_id_attribute
+  #   stream_id_from_event: :events_id_attribute
   # )
 
   # Reactions — handlers are called asynchronously when events are published.

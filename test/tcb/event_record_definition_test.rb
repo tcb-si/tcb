@@ -8,7 +8,7 @@ module TCB
 
     module Invoices
       include TCB::HandlesEvents
-      persist events(OrderPlaced, stream_id_from: :order_id)
+      persist events(OrderPlaced, stream_id_from_event: :order_id)
     end
 
     module WithoutPersist
@@ -106,7 +106,7 @@ module TCB
       mod.instance_variable_set(:@name, "Payments::Charges")
       def mod.name = @name
       mod.include(TCB::HandlesEvents)
-      mod.persist(mod.events(OrderPlaced, stream_id_from: :order_id))
+      mod.persist(mod.events(OrderPlaced, stream_id_from_event: :order_id))
 
       TCB.configure do |c|
         c.event_bus      = TCB::EventBus.new

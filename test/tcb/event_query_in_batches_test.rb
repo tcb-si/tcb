@@ -11,7 +11,7 @@ module TCB
       persist events(
         OrderPlaced,
         PaymentProcessed,
-        stream_id_from: :order_id
+        stream_id_from_event: :order_id
       )
     end
 

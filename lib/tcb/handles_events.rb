@@ -3,7 +3,7 @@
 module TCB
   module HandlesEvents
     EventHandlerRegistration = Data.define(:event_class, :handlers)
-    PersistRegistration = Data.define(:event_classes, :stream_id_from, :context)
+    PersistRegistration = Data.define(:event_classes, :stream_id_from_event, :context)
 
     def self.included(base)
       base.extend(ClassMethods)
@@ -27,10 +27,10 @@ module TCB
         @persist_registrations << registration
       end
 
-      def events(*event_classes, stream_id_from:)
+      def events(*event_classes, stream_id_from_event:)
         PersistRegistration.new(
           event_classes: event_classes,
-          stream_id_from: stream_id_from,
+          stream_id_from_event: stream_id_from_event,
           context: nil
         )
       end

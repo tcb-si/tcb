@@ -43,7 +43,7 @@ module TCB
         run_generator ["notifications"]
         assert_file "app/domain/notifications.rb" do |content|
           assert_no_match(/persist events/, content)
-          assert_no_match(/stream_id_from/, content)
+          assert_no_match(/stream_id_from_event/, content)
         end
       end
 

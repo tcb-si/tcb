@@ -42,7 +42,7 @@ module TCB
         registration = @registrations.find { |r| r.event_classes.include?(event.class) }
         next unless registration
 
-        stream_id = StreamId.build(registration.context, event.public_send(registration.stream_id_from))
+        stream_id = StreamId.build(registration.context, event.public_send(registration.stream_id_from_event))
         grouped[stream_id.to_s] << event
       end
 
