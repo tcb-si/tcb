@@ -34,6 +34,13 @@ module TCB
       def metadata_for(subscription)
         @mutex.synchronize { @metadata[subscription.handler.object_id] }
       end
+
+      def clear
+        @mutex.synchronize do
+          @subscribers.clear
+          @metadata.clear
+        end
+      end
     end
   end
 end

@@ -7,6 +7,9 @@ require 'tcb'
 require_relative 'support/event_bus_dsl'
 require "minitest/reporters"
 require "debug"
+require "date"
+require "time"
+require "bigdecimal"
 
 Minitest::Reporters.use! [Minitest::Reporters::SpecReporter.new, Minitest::Reporters::ProgressReporter.new]
 

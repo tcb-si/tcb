@@ -52,6 +52,11 @@ module TCB
       ]
     end
 
+    def reset_handlers!
+      event_bus.reset
+      flush_event_handlers
+    end
+
     private
 
     def flush_event_handlers

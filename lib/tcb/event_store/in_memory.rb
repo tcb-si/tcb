@@ -28,11 +28,17 @@ module TCB
 
       def read(stream_id, from_version: nil, to_version: nil, occurred_after: nil, limit: nil, order: :asc)
         @mutex.synchronize { @streams[stream_id].dup }
-          .then { |e| from_version   ? e.select { |env| env.version >= from_version }    : e }
-          .then { |e| to_version     ? e.select { |env| env.version <= to_version }      : e }
+          .then { |e| from_version   ? e.select { |env| env.version >= from_version }      : e }
+          .then { |e| to_version     ? e.select { |env| env.version <= to_version }        : e }
           .then { |e| occurred_after ? e.select { |env| env.occurred_at > occurred_after } : e }
-          .then { |e| order == :desc ? e.reverse                                          : e }
-          .then { |e| limit          ? e.first(limit)                                     : e }
+          .then { |e| order == :desc ? e.reverse                                           : e }
+          .then { |e| limit          ? e.first(limit)                                      : e }
+      end
+
+      def reset!
+        @mutex.synchronize do
+          @streams = Hash.new { |h, k| h[k] = [] }
+        end
       end
 
       private

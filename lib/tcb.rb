@@ -39,4 +39,9 @@ module TCB
       context: DomainContext.from_module(domain_module).to_s
     )
   end
+
+  def self.reset!
+    config.reset_handlers!
+    config.event_store.reset! if config.event_store.respond_to?(:reset!)
+  end
 end
