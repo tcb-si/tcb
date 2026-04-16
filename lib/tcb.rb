@@ -22,9 +22,10 @@ require_relative "tcb/version"
 module TCB
   Envelope = EventStore::EventStreamEnvelope
 
-  def self.record(events_from:, within: nil, &block)
+  def self.record(events_from: [], events: [], within: nil, &block)
     Record.call(
       events_from: events_from,
+      events: events,
       within: within,
       store: config.event_store,
       registrations: config.persist_registrations,

@@ -106,5 +106,29 @@ module TCB
       events = TCB.record(events_from: [order]) { }
       assert_equal [], events
     end
+
+    def test_record_accepts_direct_events
+      events = TCB.record(events: [OrderPlaced.new(order_id: 1, customer: "Alice")])
+      assert_equal [OrderPlaced.new(order_id: 1, customer: "Alice")], events
+    end
+
+    def test_record_combines_events_from_and_direct_events
+      order = Order.new
+      events = TCB.record(events_from: [order], events: [InventoryReserved.new(item_id: 42)]) do
+        order.place(order_id: 1, customer: "Alice")
+      end
+      assert_includes events, OrderPlaced.new(order_id: 1, customer: "Alice")
+      assert_includes events, InventoryReserved.new(item_id: 42)
+      assert_equal 2, events.size
+    end
+
+    def test_record_raises_when_neither_events_from_nor_events_given
+      assert_raises(ArgumentError) { TCB.record { } }
+    end
+
+    def test_record_direct_events_without_block
+      events = TCB.record(events: [OrderPlaced.new(order_id: 1, customer: "Alice")])
+      assert_equal 1, events.size
+    end
   end
 end

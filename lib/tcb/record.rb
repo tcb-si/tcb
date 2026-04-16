@@ -2,13 +2,15 @@
 
 module TCB
   class Record
-    def self.call(events_from:, within:, store:, registrations:, &block)
-      new(events_from: events_from, store: store, registrations: registrations)
+    def self.call(events_from:, events:, within:, store:, registrations:, &block)
+      raise ArgumentError, "events_from: or events: must be provided" if events_from.empty? && events.empty?
+      new(events_from: events_from, events: events, store: store, registrations: registrations)
         .call(within: within, &block)
     end
 
-    def initialize(events_from:, store:, registrations:)
+    def initialize(events_from:, events:, store:, registrations:)
       @events_from = events_from
+      @events = events
       @store = store
       @registrations = registrations
     end
@@ -24,8 +26,9 @@ module TCB
     private
 
     def execute(&block)
-      block.call
-      events = @events_from.flat_map(&:pull_recorded_events)
+      block.call if block
+      events  = @events_from.flat_map(&:pull_recorded_events)
+      events += @events
       persist(events)
       events
     rescue

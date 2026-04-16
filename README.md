@@ -154,7 +154,7 @@ module Orders
   persist events(
     OrderPlaced,
     OrderCancelled,
-    stream_id_from: :order_id
+    stream_id_from_event: :order_id
   )
 
   # Reactions — which handlers fire for each event
@@ -204,6 +204,8 @@ end
 
 ### Command handler
 
+#### With aggregate
+
 ```ruby
 # app/domain/orders/place_order_handler.rb
 module Orders
@@ -211,7 +213,7 @@ module Orders
     def call(command)
       order = Order.new(id: command.order_id)
 
-      events = TCB.record(aggregates: [order], within: ApplicationRecord) do
+      events = TCB.record(events_from: [order], within: ApplicationRecord) do
         order.place(customer: command.customer)
       end
 
@@ -222,6 +224,53 @@ end
 ```
 
 **Persistence always happens before publishing.** If an exception is raised inside the block, no events are persisted and none are published.
+
+#### Without aggregate
+
+When there is no aggregate — no state to model, just a fact to record — pass events directly:
+
+```ruby
+# app/domain/auth/register_handler.rb
+module Auth
+  class RegisterHandler
+    def call(command)
+      events = TCB.record(
+        events: [CustomerRegistered.new(user_id: command.user_id, email_address: command.email_address, token: command.token)],
+        within: ApplicationRecord
+      )
+
+      TCB.publish(*events)
+    end
+  end
+end
+```
+
+#### Combined — aggregate and direct events
+
+When a single operation produces events from both an aggregate and a direct fact, pass both. Everything is persisted and published atomically:
+
+```ruby
+# app/domain/orders/place_order_handler.rb
+module Orders
+  class PlaceOrderHandler
+    def call(command)
+      order = Order.new(id: command.order_id)
+
+      events = TCB.record(
+        events_from: [order],
+        events: [OrderingStarted.new(order_id: command.order_id, initiated_at: Time.now)],
+        within: ApplicationRecord
+      ) do
+        order.place(customer: command.customer)
+      end
+
+      TCB.publish(*events)
+    end
+  end
+end
+```
+
+**All events — from aggregates and direct — are persisted in a single transaction before any are published.**
 
 ---
 
@@ -305,7 +354,7 @@ TCB::EventStore::ActiveRecord.new
 Generate migration and AR model:
 
 ```
-bin/rails generate tcb:event_store orders
+bin/rails generate TCB:event_store orders
 ```
 
 ---
@@ -317,7 +366,7 @@ TCB includes generators to scaffold domain modules, command handlers, and migrat
 ### Install
 
 ```bash
-rails generate tcb:install
+rails generate TCB:install
 ```
 
 Creates `config/initializers/tcb.rb` with a minimal configuration template.
@@ -327,7 +376,7 @@ Creates `config/initializers/tcb.rb` with a minimal configuration template.
 ### Domain module with event store
 
 ```bash
-rails generate tcb:event_store orders place_order:order_id,customer cancel_order:order_id,reason
+rails generate TCB:event_store orders place_order:order_id,customer cancel_order:order_id,reason
 ```
 
 Generates:
@@ -341,7 +390,7 @@ Generates:
 ### Domain module without persistence (pub/sub only)
 
 ```bash
-rails generate tcb:domain notifications send_welcome_email:user_id,email send_verification_sms:user_id,phone
+rails generate TCB:domain notifications send_welcome_email:user_id,email send_verification_sms:user_id,phone
 ```
 
 Generates:
