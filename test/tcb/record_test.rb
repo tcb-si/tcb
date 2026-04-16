@@ -17,16 +17,16 @@ module TCB
 
     def test_record_returns_events_from_single_aggregate
       order = Order.new
-      events = TCB.record(aggregates: [order]) do
+      events = TCB.record(events_from: [order]) do
         order.place(order_id: 1, customer: "Alice")
       end
       assert_equal [OrderPlaced.new(order_id: 1, customer: "Alice")], events
     end
 
-    def test_record_returns_events_from_multiple_aggregates
+    def test_record_returns_events_from_multiple_events_from
       order     = Order.new
       inventory = Inventory.new
-      events = TCB.record(aggregates: [order, inventory]) do
+      events = TCB.record(events_from: [order, inventory]) do
         order.place(order_id: 1, customer: "Alice")
         inventory.reserve(item_id: 42)
       end
@@ -36,14 +36,14 @@ module TCB
 
     def test_record_returns_empty_when_no_events_recorded
       order = Order.new
-      events = TCB.record(aggregates: [order]) { }
+      events = TCB.record(events_from: [order]) { }
       assert_equal [], events
     end
 
     def test_record_propagates_exception_and_discards_events
       order = Order.new
       assert_raises(RuntimeError) do
-        TCB.record(aggregates: [order]) do
+        TCB.record(events_from: [order]) do
           order.place(order_id: 1, customer: "Alice")
           raise "Something went wrong"
         end
@@ -61,7 +61,7 @@ module TCB
       end
 
       order = Order.new
-      TCB.record(aggregates: [order], within: fake_transaction) do
+      TCB.record(events_from: [order], within: fake_transaction) do
         order.place(order_id: 1, customer: "Alice")
       end
 
@@ -70,7 +70,7 @@ module TCB
 
     def test_record_without_transaction_works_normally
       order = Order.new
-      events = TCB.record(aggregates: [order]) do
+      events = TCB.record(events_from: [order]) do
         order.place(order_id: 1, customer: "Alice")
       end
       assert_equal [OrderPlaced.new(order_id: 1, customer: "Alice")], events
@@ -89,7 +89,7 @@ module TCB
 
       order = Order.new
       assert_raises(RuntimeError) do
-        TCB.record(aggregates: [order], within: fake_transaction) do
+        TCB.record(events_from: [order], within: fake_transaction) do
           order.place(order_id: 1, customer: "Alice")
           raise "DB error"
         end
@@ -101,9 +101,9 @@ module TCB
 
     def test_consecutive_records_are_independent
       order = Order.new
-      TCB.record(aggregates: [order]) { order.place(order_id: 1, customer: "Alice") }
+      TCB.record(events_from: [order]) { order.place(order_id: 1, customer: "Alice") }
 
-      events = TCB.record(aggregates: [order]) { }
+      events = TCB.record(events_from: [order]) { }
       assert_equal [], events
     end
   end

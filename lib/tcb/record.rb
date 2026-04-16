@@ -2,13 +2,13 @@
 
 module TCB
   class Record
-    def self.call(aggregates:, within:, store:, registrations:, &block)
-      new(aggregates: aggregates, store: store, registrations: registrations)
+    def self.call(events_from:, within:, store:, registrations:, &block)
+      new(events_from: events_from, store: store, registrations: registrations)
         .call(within: within, &block)
     end
 
-    def initialize(aggregates:, store:, registrations:)
-      @aggregates = aggregates
+    def initialize(events_from:, store:, registrations:)
+      @events_from = events_from
       @store = store
       @registrations = registrations
     end
@@ -25,11 +25,11 @@ module TCB
 
     def execute(&block)
       block.call
-      events = @aggregates.flat_map(&:pull_recorded_events)
+      events = @events_from.flat_map(&:pull_recorded_events)
       persist(events)
       events
     rescue
-      @aggregates.each(&:pull_recorded_events)
+      @events_from.each(&:pull_recorded_events)
       raise
     end
 

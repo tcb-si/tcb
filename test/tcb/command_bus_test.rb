@@ -24,7 +24,7 @@ module TCB
     class PlaceOrderHandler
       def call(command)
         order = Order.new
-        events = TCB.record(aggregates: [order]) do
+        events = TCB.record(events_from: [order]) do
           order.place(order_id: command.order_id, customer: command.customer)
         end
         TCB.publish(*events)
@@ -39,7 +39,7 @@ module TCB
       class PlaceOrderHandler
         def call(command)
           order = Order.new
-          events = TCB.record(aggregates: [order]) do
+          events = TCB.record(events_from: [order]) do
             order.place(order_id: command.order_id, customer: command.customer)
           end
           TCB.publish(*events)

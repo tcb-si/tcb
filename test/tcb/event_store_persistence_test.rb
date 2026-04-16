@@ -50,7 +50,7 @@ module TCB
     # Osnovni persistence
     def test_record_persists_marked_events
       order = TestOrder.new(id: 42)
-      TCB.record(aggregates: [order]) { order.place(total: 100.0) }
+      TCB.record(events_from: [order]) { order.place(total: 100.0) }
 
       envelopes = TCB.config.event_store.read("tcb/event_store_persistence_test/test_orders|42")
       assert_equal 1, envelopes.size
@@ -59,7 +59,7 @@ module TCB
 
     def test_record_persists_multiple_events_in_same_registration
       order = TestOrder.new(id: 42)
-      TCB.record(aggregates: [order]) do
+      TCB.record(events_from: [order]) do
         order.place(total: 100.0)
         order.cancel
       end
@@ -71,7 +71,7 @@ module TCB
 
     def test_record_persists_events_from_different_domains
       order = TestOrder.new(id: 42)
-      TCB.record(aggregates: [order]) do
+      TCB.record(events_from: [order]) do
         order.place(total: 100.0)
         order.record PaymentProcessed.new(order_id: 42, amount: 100.0)
       end
@@ -84,7 +84,7 @@ module TCB
 
     def test_record_does_not_persist_unmarked_events
       order = TestOrder.new(id: 42)
-      TCB.record(aggregates: [order]) { order.place(total: 100.0) }
+      TCB.record(events_from: [order]) { order.place(total: 100.0) }
 
       envelopes = TCB.config.event_store.read("tcb/event_store_persistence_test/test_orders|99")
       assert_equal [], envelopes
@@ -94,7 +94,7 @@ module TCB
       order1 = TestOrder.new(id: 1)
       order2 = TestOrder.new(id: 2)
 
-      TCB.record(aggregates: [order1, order2]) do
+      TCB.record(events_from: [order1, order2]) do
         order1.place(total: 100.0)
         order2.place(total: 200.0)
       end
@@ -113,7 +113,7 @@ module TCB
       end
 
       order = TestOrder.new(id: 42)
-      events = TCB.record(aggregates: [order]) { order.place(total: 100.0) }
+      events = TCB.record(events_from: [order]) { order.place(total: 100.0) }
       TCB.publish(*events)
 
       poll_assert("handler called") { persisted_before_publish }
@@ -125,7 +125,7 @@ module TCB
       order = TestOrder.new(id: 42)
 
       assert_raises(RuntimeError) do
-        TCB.record(aggregates: [order]) do
+        TCB.record(events_from: [order]) do
           order.place(total: 100.0)
           raise "something went wrong"
         end
