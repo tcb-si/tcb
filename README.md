@@ -2,7 +2,7 @@
 
 A lightweight, thread-safe event and command runtime for Domain-Driven Design on Rails.
 
-TCB gives you a clean domain language that reads like pseudocode, hides infrastructure details, and avoids vendor lock-in.
+TCB gives you a clean domain language that reads like pseudocode. Infrastructure details stay out of your domain. Events, aggregates, and handlers are plain Ruby with no framework inheritance.
 
 ## Installation
 
