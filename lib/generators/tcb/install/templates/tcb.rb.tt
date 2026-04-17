@@ -5,7 +5,7 @@ TCB.configure do |c|
   # Add your domain modules here after generating them:
   #   rails generate tcb:event_store orders place_order:order_id,customer
   #   rails generate tcb:domain notifications send_welcome_email:user_id,email
-  c.event_handlers = [
+  c.domain_modules = [
     # Orders,
     # Notifications
   ]

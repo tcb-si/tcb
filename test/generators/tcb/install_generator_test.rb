@@ -16,7 +16,7 @@ module TCB
           assert_match "TCB.configure", content
           assert_match "c.event_bus", content
           assert_match "c.event_store", content
-          assert_match "c.event_handlers", content
+          assert_match "c.domain_modules", content
           assert_match "tcb:event_store", content
           assert_match "tcb:domain", content
         end

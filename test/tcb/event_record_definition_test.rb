@@ -52,7 +52,7 @@ module TCB
       TCB.configure do |c|
         c.event_bus      = TCB::EventBus.new
         c.event_store    = TCB::EventStore::ActiveRecord.new
-        c.event_handlers = [Invoices]
+        c.domain_modules = [Invoices]
       end
 
       assert Invoices.const_defined?(:EventRecord, false)
@@ -62,7 +62,7 @@ module TCB
       TCB.configure do |c|
         c.event_bus      = TCB::EventBus.new
         c.event_store    = TCB::EventStore::ActiveRecord.new
-        c.event_handlers = [Invoices]
+        c.domain_modules = [Invoices]
       end
 
       assert_equal "tcb__event_record_definition_test__invoices_events", Invoices::EventRecord.table_name
@@ -72,7 +72,7 @@ module TCB
       TCB.configure do |c|
         c.event_bus      = TCB::EventBus.new
         c.event_store    = TCB::EventStore::ActiveRecord.new
-        c.event_handlers = [Invoices]
+        c.domain_modules = [Invoices]
       end
 
       assert Invoices::EventRecord.ancestors.include?(::ActiveRecord::Base)
@@ -85,7 +85,7 @@ module TCB
       TCB.configure do |c|
         c.event_bus      = TCB::EventBus.new
         c.event_store    = TCB::EventStore::ActiveRecord.new
-        c.event_handlers = [Invoices]
+        c.domain_modules = [Invoices]
       end
 
       assert_same sentinel, Invoices::EventRecord
@@ -95,7 +95,7 @@ module TCB
       TCB.configure do |c|
         c.event_bus      = TCB::EventBus.new
         c.event_store    = TCB::EventStore::ActiveRecord.new
-        c.event_handlers = [WithoutPersist]
+        c.domain_modules = [WithoutPersist]
       end
 
       refute WithoutPersist.const_defined?(:EventRecord, false)
@@ -111,7 +111,7 @@ module TCB
       TCB.configure do |c|
         c.event_bus      = TCB::EventBus.new
         c.event_store    = TCB::EventStore::ActiveRecord.new
-        c.event_handlers = [mod]
+        c.domain_modules = [mod]
       end
 
       klass = mod.const_get(:EventRecord)

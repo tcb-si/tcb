@@ -38,7 +38,7 @@ module TCB
       TCB.configure do |c|
         c.event_bus      = TCB::EventBus.new
         c.event_store    = TCB::EventStore::InMemory.new
-        c.event_handlers = [TestOrders, TestPayments]
+        c.domain_modules = [TestOrders, TestPayments]
       end
     end
 

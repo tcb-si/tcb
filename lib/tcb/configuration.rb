@@ -26,15 +26,15 @@ module TCB
       @event_store
     end
 
-    def event_handlers=(modules)
-      @event_handlers = modules
-      flush_event_handlers
+    def domain_modules=(modules)
+      @domain_modules = modules
+      flush_domain_modules
       flush_command_handlers
       flush_persist_registrations
     end
 
-    def event_handlers
-      @event_handlers || []
+    def domain_modules
+      @domain_modules || []
     end
 
     def command_handler(command_class)
@@ -60,13 +60,13 @@ module TCB
 
     def reset_handlers!
       event_bus.reset
-      flush_event_handlers
+      flush_domain_modules
     end
 
     private
 
-    def flush_event_handlers
-      @event_handlers.each do |domain_module|
+    def flush_domain_modules
+      @domain_modules.each do |domain_module|
         next unless domain_module.respond_to?(:event_handler_registrations)
 
         domain_module.event_handler_registrations.each do |registration|
@@ -81,7 +81,7 @@ module TCB
 
     def flush_command_handlers
       @command_handlers = {}
-      @event_handlers.each do |domain_module|
+      @domain_modules.each do |domain_module|
         next unless domain_module.respond_to?(:command_handler_registrations)
 
         domain_module.command_handler_registrations.each do |reg|
@@ -92,7 +92,7 @@ module TCB
 
     def flush_persist_registrations
       @persist_registrations = []
-      @event_handlers.each do |domain_module|
+      @domain_modules.each do |domain_module|
         next unless domain_module.respond_to?(:persist_registrations)
 
         context = DomainContext.from_module(domain_module).to_s

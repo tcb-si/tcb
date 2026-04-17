@@ -39,7 +39,7 @@ module TCB
     def setup
       TCB.configure do |c|
         c.event_bus      = TCB::EventBus.new
-        c.event_handlers = [TestOrders]
+        c.domain_modules = [TestOrders]
       end
     end
 

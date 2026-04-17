@@ -46,7 +46,7 @@ module TCB
       CALLED.clear
       TCB.configure do |c|
         c.event_bus      = TCB::EventBus.new
-        c.event_handlers = [Orders]
+        c.domain_modules = [Orders]
       end
     end
 

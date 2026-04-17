@@ -21,7 +21,7 @@ module TCB
       TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new
         c.event_store = TCB::EventStore::ActiveRecord.new
-        c.event_handlers = [Orders]
+        c.domain_modules = [Orders]
       end
 
       # Clean slate between tests

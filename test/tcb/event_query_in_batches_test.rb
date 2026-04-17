@@ -20,7 +20,7 @@ module TCB
       TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new
         c.event_store = TCB::EventStore::InMemory.new
-        c.event_handlers = [Orders]
+        c.domain_modules = [Orders]
       end
 
       @store = TCB.config.event_store

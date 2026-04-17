@@ -26,7 +26,7 @@ module TCB
       TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new
         c.event_store = TCB::EventStore::InMemory.new
-        c.event_handlers = [TestDomain]
+        c.domain_modules = [TestDomain]
       end
     end
 
@@ -77,7 +77,7 @@ module TCB
       config = TCB::Configuration.new
       config.event_bus = TCB::EventBus.new
       config.event_store = store_without_reset
-      config.event_handlers = []
+      config.domain_modules = []
       TCB.instance_variable_set(:@config, config)
       config.freeze
 

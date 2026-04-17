@@ -76,7 +76,7 @@ Register at configuration time:
 ```ruby
 TCB.configure do |c|
   c.event_bus      = TCB::EventBus.new
-  c.event_handlers = [Notifications]
+  c.domain_modules = [Notifications]
 end
 
 TCB.publish(UserRegistered.new(id: 1, email: "alice@example.com"))
@@ -288,7 +288,7 @@ Each domain module maps to its own database table, keeping domains isolated:
 TCB.configure do |c|
   c.event_bus      = TCB::EventBus.new
   c.event_store    = TCB::EventStore::ActiveRecord.new
-  c.event_handlers = [Orders, Payments]
+  c.domain_modules = [Orders, Payments]
 
   # Optional: additional classes for YAML serialization
   c.extra_serialization_classes = [ActiveSupport::TimeWithZone, Money]
@@ -411,7 +411,7 @@ Generates:
 After generating, add your module to `config/initializers/tcb.rb`. This is the only place TCB needs to know about your domain modules — all reactions, persistence rules, and handler mappings are declared inside the module itself, not here:
 
 ```ruby
-c.event_handlers = [
+c.domain_modules = [
   Orders,
   Notifications,
 ]
@@ -463,7 +463,7 @@ class OrdersTest < Minitest::Test
     TCB.configure do |c|
       c.event_bus   = TCB::EventBus.new
       c.event_store = TCB::EventStore::InMemory.new
-      c.event_handlers = [Orders]
+      c.domain_modules = [Orders]
     end
   end
 
