@@ -54,8 +54,8 @@ This works independently of aggregates and persistence — you can use `HandlesE
 module Notifications
   include TCB::HandlesEvents
 
-  on UserRegistered, execute(SendWelcomeEmail, TrackRegistration)
-  on OrderPlaced,    execute(SendOrderConfirmation)
+  on UserRegistered, react_with(SendWelcomeEmail, TrackRegistration)
+  on OrderPlaced,    react_with(SendOrderConfirmation)
 end
 
 class SendWelcomeEmail
@@ -88,7 +88,7 @@ Handlers execute asynchronously in a background thread. Each handler is isolated
 
 ## Commands
 
-Commands express intent. They are validated before execution and routed to a handler by convention (`PlaceOrder` → `PlaceOrderHandler`):
+Commands express intent. They are validated before execution and routed to an explicitly registered handler:
 
 ```ruby
 PlaceOrder = Data.define(:order_id, :customer) do
@@ -102,9 +102,26 @@ class PlaceOrderHandler
     # ... domain logic
   end
 end
+```
+
+Use `TCB::HandlesCommands` to register the handler explicitly:
+
+```ruby
+module Orders
+  include TCB::HandlesCommands
+
+  handle PlaceOrder, with(PlaceOrderHandler)
+end
+
+TCB.configure do |c|
+  c.event_bus      = TCB::EventBus.new
+  c.domain_modules = [Orders]
+end
 
 TCB.dispatch(PlaceOrder.new(order_id: 42, customer: "Alice"))
 ```
+
+There is no convention-based routing. Every command handler is declared explicitly — reading the module tells the whole story.
 
 ---
 
@@ -131,7 +148,7 @@ Keep everything that belongs together, together. Events, commands, persistence r
 ```ruby
 # app/domain/orders.rb
 module Orders
-  include TCB::HandlesEvents
+  include TCB::Domain
 
   # Events — past tense, immutable facts
   OrderPlaced    = Data.define(:order_id, :customer)
@@ -157,9 +174,13 @@ module Orders
     stream_id_from_event: :order_id
   )
 
-  # Reactions — which handlers fire for each event
-  on OrderPlaced,    execute(ReserveInventory, ChargePayment)
-  on OrderCancelled, execute(RefundPayment)
+  # Commands — each routed to exactly one handler
+  handle PlaceOrder,  with(PlaceOrderHandler)
+  handle CancelOrder, with(CancelOrderHandler)
+
+  # Reactions — handlers called asynchronously when events are published
+  on OrderPlaced,    react_with(ReserveInventory, ChargePayment)
+  on OrderCancelled, react_with(RefundPayment)
 
   # Facade — clean public interface, no TCB details leak out
   def self.place(order_id:, customer:)
@@ -171,6 +192,8 @@ module Orders
   end
 end
 ```
+
+`TCB::Domain` is a convenience mixin — it includes both `TCB::HandlesEvents` and `TCB::HandlesCommands`. The full picture is visible in one place: what commands this domain accepts, what events it reacts to, and what gets persisted.
 
 Callers interact with the domain through the facade — no infrastructure details leak out:
 
@@ -461,8 +484,8 @@ class OrdersTest < Minitest::Test
 
   def setup
     TCB.configure do |c|
-      c.event_bus   = TCB::EventBus.new
-      c.event_store = TCB::EventStore::InMemory.new
+      c.event_bus      = TCB::EventBus.new
+      c.event_store    = TCB::EventStore::InMemory.new
       c.domain_modules = [Orders]
     end
   end
