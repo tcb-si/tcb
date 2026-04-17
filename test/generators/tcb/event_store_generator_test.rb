@@ -21,7 +21,7 @@ module TCB
         run_generator ["orders"]
         assert_file "app/domain/orders.rb" do |content|
           assert_match "module Orders", content
-          assert_match "include TCB::HandlesEvents", content
+          assert_match "include TCB::Domain", content
         end
       end
 

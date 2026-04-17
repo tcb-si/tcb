@@ -1,5 +1,5 @@
 module <%= module_class_name %>
-  include TCB::HandlesEvents
+  include TCB::Domain
 <% if comments? %>
 
   # Events — past tense, immutable facts
@@ -25,8 +25,11 @@ module <%= module_class_name %>
   #   stream_id_from_event: :events_id_attribute
   # )
 
-  # Reactions — handlers are called asynchronously when events are published.
-  # on EventClass, execute(HandlerClass)
+  # Commands — each routed to exactly one handler
+  # handle CommandClass, with(CommandHandlerClass)
+
+  # Reactions — handlers are called asynchronously when events are published
+  # on EventClass, react_with(EventHandlerClass)
 <% end %>
 
   # Facade

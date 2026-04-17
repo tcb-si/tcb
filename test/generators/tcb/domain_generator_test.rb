@@ -21,7 +21,7 @@ module TCB
         run_generator ["notifications"]
         assert_file "app/domain/notifications.rb" do |content|
           assert_match "module Notifications", content
-          assert_match "include TCB::HandlesEvents", content
+          assert_match "include TCB::Domain", content
         end
       end
 
