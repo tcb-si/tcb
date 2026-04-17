@@ -12,15 +12,12 @@ module TCB
     end
 
     module ClassMethods
-      def on(event_class, handlers)
-        @event_handler_registrations << EventHandlerRegistration.new(
-          event_class: event_class,
-          handlers: handlers
-        )
+      def react_with(*handlers)
+        EventHandlerRegistration.new(event_class: :undefined, handlers: handlers)
       end
 
-      def react_with(*handlers)
-        handlers
+      def on(event_class, registration)
+        @event_handler_registrations << registration.with(event_class: event_class)
       end
 
       def persist(registration)

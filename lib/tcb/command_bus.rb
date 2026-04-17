@@ -17,11 +17,10 @@ module TCB
   private_class_method :validate!
 
   def self.resolve_handler(command)
-    handler_name = "#{command.class.name}Handler"
-    Object.const_get(handler_name)
-  rescue NameError
-    raise CommandHandlerNotFound,
-      "No handler found for #{command.class.name}, expected #{command.class.name}Handler"
+    handler = config.command_handler(command.class)
+    raise CommandHandlerNotFound, "No handler registered for #{command.class.name}" unless handler
+
+    handler
   end
   private_class_method :resolve_handler
 end

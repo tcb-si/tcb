@@ -29,11 +29,17 @@ module TCB
     def event_handlers=(modules)
       @event_handlers = modules
       flush_event_handlers
+      flush_command_handlers
       flush_persist_registrations
     end
 
     def event_handlers
       @event_handlers || []
+    end
+
+    def command_handler(command_class)
+      @command_handlers ||= {}
+      @command_handlers[command_class]
     end
 
     def extra_serialization_classes=(classes)
@@ -61,6 +67,8 @@ module TCB
 
     def flush_event_handlers
       @event_handlers.each do |domain_module|
+        next unless domain_module.respond_to?(:event_handler_registrations)
+
         domain_module.event_handler_registrations.each do |registration|
           registration.handlers.each do |handler|
             event_bus.subscribe(registration.event_class) do |event|
@@ -71,9 +79,22 @@ module TCB
       end
     end
 
+    def flush_command_handlers
+      @command_handlers = {}
+      @event_handlers.each do |domain_module|
+        next unless domain_module.respond_to?(:command_handler_registrations)
+
+        domain_module.command_handler_registrations.each do |reg|
+          @command_handlers[reg.command_class] = reg.handler
+        end
+      end
+    end
+
     def flush_persist_registrations
       @persist_registrations = []
       @event_handlers.each do |domain_module|
+        next unless domain_module.respond_to?(:persist_registrations)
+
         context = DomainContext.from_module(domain_module).to_s
         domain_module.persist_registrations.each do |registration|
           @persist_registrations << registration.with(context: context)

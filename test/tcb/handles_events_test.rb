@@ -78,7 +78,7 @@ module TCB
       assert_raises(NameError) do
         Module.new do
           include TCB::HandlesEvents
-          on TestOrders::OrderPlaced, execute(NonExistentHandler)
+          on TestOrders::OrderPlaced, react_with(NonExistentHandler)
         end
       end
     end
