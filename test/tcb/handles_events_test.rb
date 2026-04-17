@@ -29,14 +29,14 @@ module TCB
         define_method(:call) { |event| raise StandardError, "boom" }
       end
 
-      on OrderPlaced, execute(
+      on OrderPlaced, react_with(
         ReserveInventory,
         ChargePayment
       )
 
-      on OrderCancelled, execute(RefundPayment)
+      on OrderCancelled, react_with(RefundPayment)
 
-      on FailureAnticipated, execute(
+      on FailureAnticipated, react_with(
         FailGracefully,
         ReserveInventory
       )

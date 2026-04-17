@@ -17,7 +17,7 @@ module TCB
         define_method(:call) { |event| CALLED << :handled }
       end
 
-      on SomethingHappened, execute(Handler)
+      on SomethingHappened, react_with(Handler)
     end
 
     def setup

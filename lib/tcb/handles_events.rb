@@ -19,7 +19,7 @@ module TCB
         )
       end
 
-      def execute(*handlers)
+      def react_with(*handlers)
         handlers
       end
 
