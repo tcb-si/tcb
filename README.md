@@ -472,23 +472,70 @@ bus.force_shutdown
 
 ## Testing
 
-Use `TCB::EventStore::InMemory` in tests.
+Use `TCB::EventStore::InMemory` in tests. TCB is designed so that `TCB.reset!` fully tears down and rebuilds the configuration between tests — shutting down the event bus, clearing the event store, and re-registering all handlers.
+
+The `TCB.configure` block is stored and replayed on every `reset!`, so each test gets a fresh event bus and a clean event store automatically.
+
+### Rails initializer
+
+```ruby
+# config/initializers/tcb.rb
+Rails.application.config.to_prepare do
+  TCB.configure do |c|
+    c.event_bus   = TCB::EventBus.new(
+      handle_signals: true,
+      shutdown_timeout: 10.0
+    )
+    c.event_store = Rails.env.test? ? TCB::EventStore::InMemory.new
+                                    : TCB::EventStore::ActiveRecord.new
+    c.domain_modules = [Orders, Notifications]
+  end
+end
+```
+
+### RSpec
+
+```ruby
+# spec/support/tcb.rb
+RSpec.configure do |config|
+  config.include TCB::RSpecHelpers
+
+  config.after(:each) do
+    TCB.reset!
+  end
+end
+```
+
+Require it from `rails_helper.rb`:
+
+```ruby
+require "support/tcb"
+```
+
+`TCB.reset!` replays the configure block — `Rails.env.test?` is re-evaluated each time, so `InMemory` gets a fresh instance on every reset.
+
+#### have_published
+
+```ruby
+expect { Orders.place(order_id: 42, customer: "Alice") }.to have_published(Orders::OrderPlaced)
+expect { Orders.place(...) }.to have_published(Orders::OrderPlaced.new(order_id: 42, customer: "Alice"))
+expect { Orders.place(...) }.to have_published(Orders::OrderPlaced, within: 0.5)
+```
+
+#### poll_match
+
+```ruby
+expect { CALLED.include?(:reserve_inventory) }.to poll_match
+expect { Payment.completed? }.to poll_match(within: 2.0)
+```
+
+---
 
 ### Minitest
-
-Include `TCB::MinitestHelpers` in your test class:
 
 ```ruby
 class OrdersTest < Minitest::Test
   include TCB::MinitestHelpers
-
-  def setup
-    TCB.configure do |c|
-      c.event_bus      = TCB::EventBus.new
-      c.event_store    = TCB::EventStore::InMemory.new
-      c.domain_modules = [Orders]
-    end
-  end
 
   def teardown
     TCB.reset!
@@ -510,35 +557,6 @@ assert_published(Orders::OrderPlaced, within: 0.5) { Orders.place(...) }
 ```ruby
 poll_assert("handler was called") { CALLED.include?(:reserve_inventory) }
 poll_assert("payment processed", within: 2.0) { Payment.completed? }
-```
-
-### RSpec (experimental)
-
-Include `TCB::RSpecHelpers` in your spec:
-
-```ruby
-RSpec.configure do |config|
-  config.include TCB::RSpecHelpers
-
-  config.before(:each) do
-    TCB.reset!
-  end
-end
-```
-
-#### have_published
-
-```ruby
-expect { Orders.place(order_id: 42, customer: "Alice") }.to have_published(Orders::OrderPlaced)
-expect { Orders.place(...) }.to have_published(Orders::OrderPlaced.new(order_id: 42, customer: "Alice"))
-expect { Orders.place(...) }.to have_published(Orders::OrderPlaced, within: 0.5)
-```
-
-#### poll_match
-
-```ruby
-expect { CALLED.include?(:reserve_inventory) }.to poll_match
-expect { Payment.completed? }.to poll_match(within: 2.0)
 ```
 
 ---

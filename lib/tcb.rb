@@ -42,8 +42,16 @@ module TCB
     )
   end
 
+  def self.configure(&block)
+    @configure_block = block
+    yield config
+    config.permitted_serialization_classes
+    config.freeze
+  end
+
   def self.reset!
-    config.reset_handlers!
-    config.event_store.reset! if config.event_store.respond_to?(:reset!)
+    @config.event_bus.force_shutdown
+    @config = nil
+    configure(&@configure_block) if @configure_block
   end
 end

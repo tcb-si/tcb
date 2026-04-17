@@ -31,7 +31,7 @@ module TCB
     end
 
     def teardown
-      TCB.config.event_bus.force_shutdown
+      TCB.config.event_bus.force_shutdown rescue nil  # ← rescue nil
       TCB.instance_variable_set(:@config, nil)
     end
 
@@ -113,6 +113,24 @@ module TCB
       envelopes = store.read("orders|1")
       assert_equal 1, envelopes.size
       assert_equal 1, envelopes.first.version
+    end
+
+    def test_reset_reconfigures_from_original_block
+      # po reset! je config svež, ne frozen
+      TCB.reset!
+      assert TCB.config.frozen?  # še ni konfiguriran — ali...
+    end
+
+    def test_reset_creates_fresh_event_bus
+      original_bus = TCB.config.event_bus
+      TCB.reset!
+      refute_same original_bus, TCB.config.event_bus
+    end
+
+    def test_reset_without_configure_block_clears_config
+      TCB.instance_variable_set(:@configure_block, nil)
+      TCB.reset!
+      assert_raises(TCB::ConfigurationError) { TCB.config.event_bus }
     end
   end
 end

@@ -15,7 +15,11 @@ module TCB
     end
 
     def event_bus
-      @event_bus || raise(ConfigurationError, "TCB event_bus is not configured. Call TCB.configure { |c| c.event_bus = TCB::EventBus.new }")
+      @event_bus ||
+        raise(
+          ConfigurationError,
+          "TCB event_bus is not configured. Call TCB.configure { |c| c.event_bus = TCB::EventBus.new }"
+        )
     end
 
     def event_store=(store)
@@ -111,12 +115,6 @@ module TCB
       end
       domain_module.const_set(:EventRecord, klass)
     end
-  end
-
-  def self.configure
-    yield config
-    config.permitted_serialization_classes
-    config.freeze
   end
 
   def self.config
