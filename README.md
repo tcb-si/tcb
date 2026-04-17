@@ -103,7 +103,7 @@ class PlaceOrderHandler
   end
 end
 
-TCB.execute(PlaceOrder.new(order_id: 42, customer: "Alice"))
+TCB.dispatch(PlaceOrder.new(order_id: 42, customer: "Alice"))
 ```
 
 ---
@@ -163,11 +163,11 @@ module Orders
 
   # Facade — clean public interface, no TCB details leak out
   def self.place(order_id:, customer:)
-    TCB.execute(PlaceOrder.new(order_id: order_id, customer: customer))
+    TCB.dispatch(PlaceOrder.new(order_id: order_id, customer: customer))
   end
 
   def self.cancel(order_id:, reason:)
-    TCB.execute(CancelOrder.new(order_id: order_id, reason: reason))
+    TCB.dispatch(CancelOrder.new(order_id: order_id, reason: reason))
   end
 end
 ```

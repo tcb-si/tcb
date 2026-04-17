@@ -32,7 +32,7 @@ module <%= module_class_name %>
   # Facade
 <% parsed_commands.each do |cmd| %>
   def self.<%= cmd.name %>(<%= cmd.attrs.map { |a| "#{a}:" }.join(", ") %>)
-    TCB.execute(<%= cmd.command_class_name %>.new(<%= cmd.attrs.map { |a| "#{a}: #{a}" }.join(", ") %>))
+    TCB.dispatch(<%= cmd.command_class_name %>.new(<%= cmd.attrs.map { |a| "#{a}: #{a}" }.join(", ") %>))
   end
 <% end %>
 end

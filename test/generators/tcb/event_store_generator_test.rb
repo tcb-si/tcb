@@ -61,7 +61,7 @@ module TCB
         run_generator ["orders", "place_order:order_id,customer"]
         assert_file "app/domain/orders.rb" do |content|
           assert_match "def self.place_order(order_id:, customer:)", content
-          assert_match "TCB.execute(PlaceOrder.new(order_id: order_id, customer: customer))", content
+          assert_match "TCB.dispatch(PlaceOrder.new(order_id: order_id, customer: customer))", content
         end
       end
 

@@ -2,7 +2,7 @@
 module TCB
   CommandHandlerNotFound = Class.new(StandardError)
 
-  def self.execute(command)
+  def self.dispatch(command)
     validate!(command)
     handler = resolve_handler(command)
     handler.new.call(command)

@@ -65,48 +65,48 @@ module TCB
 
     def test_execute_calls_validate_before_handler
       assert_raises(ArgumentError) do
-        TCB.execute(PlaceOrder.new(order_id: 1, customer: nil))
+        TCB.dispatch(PlaceOrder.new(order_id: 1, customer: nil))
       end
     end
 
     def test_execute_dispatches_to_correct_handler
-      events = TCB.execute(PlaceOrder.new(order_id: 1, customer: "Alice"))
+      events = TCB.dispatch(PlaceOrder.new(order_id: 1, customer: "Alice"))
       assert_includes events, OrderPlaced.new(order_id: 1, customer: "Alice")
     end
 
     def test_execute_raises_when_handler_not_found
       assert_raises(TCB::CommandHandlerNotFound) do
-        TCB.execute(RaiseOnCommandWithoutHandler.new(id: 1))
+        TCB.dispatch(RaiseOnCommandWithoutHandler.new(id: 1))
       end
     end
 
     def test_execute_raises_when_validate_not_defined
       assert_raises(NotImplementedError) do
-        TCB.execute(RaiseOnCommandWithoutValidate.new(id: 1))
+        TCB.dispatch(RaiseOnCommandWithoutValidate.new(id: 1))
       end
     end
 
     def test_execute_returns_events_from_handler
-      events = TCB.execute(PlaceOrder.new(order_id: 1, customer: "Alice"))
+      events = TCB.dispatch(PlaceOrder.new(order_id: 1, customer: "Alice"))
       assert_equal [OrderPlaced.new(order_id: 1, customer: "Alice")], events
     end
 
     def test_handler_not_found_error_message_is_helpful
       error = assert_raises(TCB::CommandHandlerNotFound) do
-        TCB.execute(RaiseOnCommandWithoutHandler.new(id: 1))
+        TCB.dispatch(RaiseOnCommandWithoutHandler.new(id: 1))
       end
       assert_includes error.message, "RaiseOnCommandWithoutHandler"
       assert_includes error.message, "RaiseOnCommandWithoutHandlerHandler"
     end
 
     def test_execute_finds_handler_in_same_namespace
-      events = TCB.execute(Orders::PlaceOrder.new(order_id: 1, customer: "Alice"))
+      events = TCB.dispatch(Orders::PlaceOrder.new(order_id: 1, customer: "Alice"))
       assert_includes events, OrderPlaced.new(order_id: 1, customer: "Alice")
     end
 
     def test_execute_raises_when_handler_not_in_same_namespace
       error = assert_raises(TCB::CommandHandlerNotFound) do
-        TCB.execute(CommandWithHandlerInDifferentNamespace::PlaceOrder.new(order_id: 1, customer: "Alice"))
+        TCB.dispatch(CommandWithHandlerInDifferentNamespace::PlaceOrder.new(order_id: 1, customer: "Alice"))
       end
       assert_includes error.message, "PlaceOrderHandler"
     end
