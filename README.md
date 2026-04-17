@@ -468,8 +468,7 @@ class OrdersTest < Minitest::Test
   end
 
   def teardown
-    TCB.config.event_bus.force_shutdown
-    TCB.instance_variable_set(:@config, nil)
+    TCB.reset!
   end
 end
 ```
@@ -497,6 +496,10 @@ Include `TCB::RSpecHelpers` in your spec:
 ```ruby
 RSpec.configure do |config|
   config.include TCB::RSpecHelpers
+
+  config.before(:each) do
+    TCB.reset!
+  end
 end
 ```
 
