@@ -24,9 +24,12 @@ module <%= module_class_name %>
   #   EventClass,
   #   stream_id_from_event: :events_id_attribute
   # )
+<% end %>
 
-  # Commands — each routed to exactly one handler
-  # handle CommandClass, with(CommandHandlerClass)
+<% parsed_commands.each do |cmd| %>
+  handle <%= cmd.command_class_name %>, with(<%= cmd.handler_class_name %>)
+<% end %>
+<% if comments? %>
 
   # Reactions — handlers are called asynchronously when events are published
   # on EventClass, react_with(EventHandlerClass)
