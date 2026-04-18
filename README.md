@@ -2,7 +2,9 @@
 
 A lightweight, thread-safe event and command runtime for Domain-Driven Design on Rails.
 
-TCB gives you a clean domain language that reads like pseudocode. Infrastructure details stay out of your domain. Events, aggregates, and handlers are plain Ruby with no framework inheritance.
+TCB gives Rails applications a clean domain language. Events, aggregates, and handlers are plain Ruby. No framework inheritance, no infrastructure details leaking into your domain.
+
+TCB uses a command and event bus as an architectural coordination mechanism. Commands are decisions routed to exactly one handler. Events are facts broadcast to any number of reactions. The goal is to isolate side-effects, allow independent evolution of behaviors, and support an increasing number of business-significant events.
 
 ## Installation
 
@@ -20,7 +22,7 @@ And then execute:
 
 ## Event Bus
 
-The simplest use of TCB is a standalone pub/sub bus. Events are named in the past tense — they represent facts that have already happened:
+The simplest use of TCB is a standalone pub/sub bus. Events are named in the past tense. They represent facts that have already happened:
 
 ```ruby
 UserRegistered = Data.define(:id, :email)
@@ -42,20 +44,16 @@ end
 bus.publish(UserRegistered.new(id: 1, email: "alice@example.com"))
 ```
 
-### Class handlers with `TCB::HandlesEvents`
+### `TCB::HandlesEvents`
 
-TCB is designed around a single architectural principle: a domain module should be understandable at a glance. Events, commands, persistence rules, and reactions belong together — not scattered across initializers, config files, and handler registries.
-
-`TCB::HandlesEvents` is how you express reactions close to the domain. When you open `orders.rb`, you see exactly what happens when an `OrderPlaced` event is raised — no indirection, no magic, no hunting through config. The domain speaks for itself.
-
-This works independently of aggregates and persistence — you can use `HandlesEvents` purely as a pub/sub mechanism:
+Instead of block handlers, reactions can be declared as classes inside a module. This keeps handlers close to the domain and readable at a glance.
 
 ```ruby
 module Notifications
   include TCB::HandlesEvents
 
-  on UserRegistered, react_with(SendWelcomeEmail, TrackRegistration)
-  on OrderPlaced,    react_with(SendOrderConfirmation)
+  on Auth::UserRegistered, react_with(SendWelcomeEmail, TrackRegistration)
+  on Orders::OrderPlaced,  react_with(SendOrderConfirmation)
 end
 
 class SendWelcomeEmail
@@ -71,6 +69,8 @@ class TrackRegistration
 end
 ```
 
+Event classes can come from anywhere. `TCB::HandlesEvents` only cares that they are published on the bus. Cross-module reactions are the norm, not the exception.
+
 Register at configuration time:
 
 ```ruby
@@ -79,16 +79,16 @@ TCB.configure do |c|
   c.domain_modules = [Notifications]
 end
 
-TCB.publish(UserRegistered.new(id: 1, email: "alice@example.com"))
+TCB.publish(Auth::UserRegistered.new(id: 1, email: "alice@example.com"))
 ```
 
-Handlers execute asynchronously in a background thread. Each handler is isolated — one failure does not prevent others from executing.
+Handlers execute asynchronously in a background thread. Each handler is isolated. One failure does not prevent others from executing.
 
 ---
 
-## Commands
+## TCB::HandlesCommands
 
-Commands express intent. They are validated before execution and routed to an explicitly registered handler:
+Commands express intent. They are validated before execution and routed to an explicitly registered handler. One command, one handler. Commands are decisions, not broadcasts.
 
 ```ruby
 PlaceOrder = Data.define(:order_id, :customer) do
@@ -110,6 +110,7 @@ Use `TCB::HandlesCommands` to register the handler explicitly:
 module Orders
   include TCB::HandlesCommands
 
+  # one command, one handler
   handle PlaceOrder, with(PlaceOrderHandler)
 end
 
@@ -121,19 +122,21 @@ end
 TCB.dispatch(PlaceOrder.new(order_id: 42, customer: "Alice"))
 ```
 
-There is no convention-based routing. Every command handler is declared explicitly — reading the module tells the whole story.
+There is no convention-based routing. Every command handler is declared explicitly. Reading the module tells the whole story.
 
 ---
 
 ## Domain-Driven Design
 
-For richer domains, TCB provides aggregates, event persistence, and reactive handlers — all expressed in a clean domain language.
+Aggregates, persistence, and reactive handlers are where DDD gets complex. TCB keeps the domain language clean regardless. The infrastructure stays out of sight.
 
 ### Recommended file structure
 
+Keep domain code together. TCB convention is a single `app/domain` folder. Beyond that, structure is yours to decide.
+
 ```
 app/domain/
-  orders.rb               # domain module — the public interface
+  orders.rb               # domain module, public interface
   orders/
     order.rb              # aggregate
     place_order_handler.rb
@@ -143,18 +146,18 @@ app/domain/
 
 ### The domain module
 
-Keep everything that belongs together, together. Events, commands, persistence rules, and reactions are all declared in one place:
+The domain module is a boundary. Everything inside speaks the domain language. Nothing leaks out, nothing bleeds in. Keep everything that belongs together, together. Events, commands, persistence rules, and reactions are all declared in one place:
 
 ```ruby
 # app/domain/orders.rb
 module Orders
   include TCB::Domain
 
-  # Events — past tense, immutable facts
+  # Events
   OrderPlaced    = Data.define(:order_id, :customer)
   OrderCancelled = Data.define(:order_id, :reason)
 
-  # Commands — present tense, expressed intent
+  # Commands
   PlaceOrder  = Data.define(:order_id, :customer) do
     def validate!
       raise ArgumentError, "customer required" if customer.nil?
@@ -167,42 +170,48 @@ module Orders
     end
   end
 
-  # Persistence — which events are stored and how to derive the stream
+  # Persistence
   persist events(
     OrderPlaced,
     OrderCancelled,
     stream_id_from_event: :order_id
   )
 
-  # Commands — each routed to exactly one handler
+  # Commands
   handle PlaceOrder,  with(PlaceOrderHandler)
   handle CancelOrder, with(CancelOrderHandler)
 
-  # Reactions — handlers called asynchronously when events are published
+  # Reactions
   on OrderPlaced,    react_with(ReserveInventory, ChargePayment)
   on OrderCancelled, react_with(RefundPayment)
 
-  # Facade — clean public interface, no TCB details leak out
-  def self.place(order_id:, customer:)
+  # Facade
+  def self.place!(order_id:, customer:)
     TCB.dispatch(PlaceOrder.new(order_id: order_id, customer: customer))
   end
 
-  def self.cancel(order_id:, reason:)
+  def self.cancel!(order_id:, reason:)
     TCB.dispatch(CancelOrder.new(order_id: order_id, reason: reason))
   end
 end
 ```
 
-`TCB::Domain` is a convenience mixin — it includes both `TCB::HandlesEvents` and `TCB::HandlesCommands`. The full picture is visible in one place: what commands this domain accepts, what events it reacts to, and what gets persisted.
+`TCB::Domain` includes both `TCB::HandlesEvents` and `TCB::HandlesCommands`. The full picture is visible in one place.
 
-Callers interact with the domain through the facade — no infrastructure details leak out:
+The facade is the public contract. Callers get plain method calls with meaningful names. TCB stays out of sight:
 
 ```ruby
-Orders.place(order_id: 42, customer: "Alice")
-Orders.cancel(order_id: 42, reason: "changed mind")
+Orders.place!(order_id: 42, customer: "Alice")
+Orders.cancel!(order_id: 42, reason: "changed mind")
 ```
 
+Facade methods use the bang convention. `TCB.dispatch` calls `validate!` on the command before routing it to the handler and raises if validation fails. Naming facade methods with `!` signals to callers that exceptions are expected.
+
 ### Aggregate
+
+An aggregate is the consistency boundary around your domain state. It decides what is allowed and records what happened. TCB aggregates are plain Ruby objects. No base class, no persistence concerns.
+
+The `TCB.record` block is the transactional boundary. Pass one aggregate or many. Either everything is persisted as it should be, or nothing is. The domain stays in a valid state.
 
 ```ruby
 # app/domain/orders/order.rb
@@ -227,6 +236,8 @@ end
 
 ### Command handler
 
+The command handler is the entry point into the domain. This is where you ensure the domain stays in a valid state before announcing anything to the rest of the system. Persist first, publish after.
+
 #### With aggregate
 
 ```ruby
@@ -236,6 +247,8 @@ module Orders
     def call(command)
       order = Order.new(id: command.order_id)
 
+      # within: ApplicationRecord wraps the block in a database transaction.
+      # If anything raises, no events are persisted and none are published.
       events = TCB.record(events_from: [order], within: ApplicationRecord) do
         order.place(customer: command.customer)
       end
@@ -246,19 +259,22 @@ module Orders
 end
 ```
 
-**Persistence always happens before publishing.** If an exception is raised inside the block, no events are persisted and none are published.
+**Persistence always happens before publishing.** If an exception is raised inside the block, no events are persisted and none are published. Omitting `within:` skips the transaction. Events are still collected and returned, but not persisted to the event store.
 
 #### Without aggregate
 
-When there is no aggregate — no state to model, just a fact to record — pass events directly:
+When there is no aggregate, pass events directly:
 
 ```ruby
 # app/domain/auth/register_handler.rb
 module Auth
   class RegisterHandler
     def call(command)
+      # within: ApplicationRecord wraps persistence in a transaction.
+      # For a single event it is optional. But if you record multiple events,
+      # use within: to ensure they are all persisted or none are.
       events = TCB.record(
-        events: [CustomerRegistered.new(user_id: command.user_id, email_address: command.email_address, token: command.token)],
+        events: [UserRegistered.new(user_id: command.user_id, email_address: command.email_address, token: command.token)],
         within: ApplicationRecord
       )
 
@@ -268,7 +284,7 @@ module Auth
 end
 ```
 
-#### Combined — aggregate and direct events
+#### Combined
 
 When a single operation produces events from both an aggregate and a direct fact, pass both. Everything is persisted and published atomically:
 
@@ -293,13 +309,13 @@ module Orders
 end
 ```
 
-**All events — from aggregates and direct — are persisted in a single transaction before any are published.**
+**All events are persisted in a single transaction before any are published.**
 
 ---
 
 ## Configuration
 
-Each domain module maps to its own database table, keeping domains isolated:
+Each domain module gets its own database table. Domains stay isolated at the persistence level. This is a step toward event sourcing. Every business-significant moment is recorded, queryable, and replayable.
 
 | Module | Table |
 |---|---|
@@ -322,6 +338,8 @@ end
 
 ## Reading Events
 
+Events are stored per aggregate stream. Query them by domain module and aggregate id. The result is always ordered by version. For large streams, `in_batches` uses keyset pagination and keeps memory usage flat.
+
 ```ruby
 # All events for an aggregate
 TCB.read(Orders).stream(42).to_a
@@ -337,7 +355,7 @@ TCB.read(Orders).stream(42).occurred_after(1.week.ago).to_a
 # Last N events (oldest first)
 TCB.read(Orders).stream(42).last(10)
 
-# Batch processing — keyset pagination, memory safe
+# Batch processing
 TCB.read(Orders).stream(42).in_batches(of: 100) do |batch|
   batch.each { |envelope| replay(envelope.event) }
 end
@@ -368,7 +386,7 @@ envelope.occurred_at  # Time
 TCB::EventStore::InMemory.new
 ```
 
-### ActiveRecord — YAML (text column, all databases including SQLite)
+### ActiveRecord (YAML, all databases including SQLite)
 
 ```ruby
 TCB::EventStore::ActiveRecord.new
@@ -394,8 +412,6 @@ rails generate TCB:install
 
 Creates `config/initializers/tcb.rb` with a minimal configuration template.
 
----
-
 ### Domain module with event store
 
 ```bash
@@ -403,12 +419,10 @@ rails generate TCB:event_store orders place_order:order_id,customer cancel_order
 ```
 
 Generates:
-- `app/domain/orders.rb` — domain module with commands, persistence placeholder, reactions placeholder, and facade
-- `app/domain/orders/place_order_handler.rb` — command handler with `TCB.record` / `TCB.publish` scaffold
+- `app/domain/orders.rb`: domain module with commands, persistence placeholder, reactions placeholder, and facade
+- `app/domain/orders/place_order_handler.rb`: command handler with `TCB.record` / `TCB.publish` scaffold
 - `app/domain/orders/cancel_order_handler.rb`
 - `db/migrate/TIMESTAMP_create_orders_events.rb`
-
----
 
 ### Domain module without persistence (pub/sub only)
 
@@ -417,11 +431,9 @@ rails generate TCB:domain notifications send_welcome_email:user_id,email send_ve
 ```
 
 Generates:
-- `app/domain/notifications.rb` — domain module with commands, reactions placeholder, and facade using `TCB.publish`
+- `app/domain/notifications.rb`: domain module with commands, reactions placeholder, and facade using `TCB.publish`
 - `app/domain/notifications/send_welcome_email_handler.rb`
 - `app/domain/notifications/send_verification_sms_handler.rb`
-
----
 
 ### Options
 
@@ -431,7 +443,7 @@ Generates:
 | `--skip-migration` | Skip migration (event_store only) |
 | `--no-comments` | Generate without inline guidance comments |
 
-After generating, add your module to `config/initializers/tcb.rb`. This is the only place TCB needs to know about your domain modules — all reactions, persistence rules, and handler mappings are declared inside the module itself, not here:
+After generating, add your module to `config/initializers/tcb.rb`. This is the only place TCB needs to know about your domain modules. All reactions, persistence rules, and handler mappings are declared inside the module itself, not here:
 
 ```ruby
 c.domain_modules = [
@@ -459,7 +471,7 @@ end
 
 ```ruby
 bus = TCB::EventBus.new(
-  handle_signals: true,   # trap TERM and INT automatically
+  handle_signals: true,
   shutdown_timeout: 30.0
 )
 
@@ -472,9 +484,9 @@ bus.force_shutdown
 
 ## Testing
 
-Use `TCB::EventStore::InMemory` in tests. TCB is designed so that `TCB.reset!` fully tears down and rebuilds the configuration between tests — shutting down the event bus, clearing the event store, and re-registering all handlers.
+Use `TCB::EventStore::InMemory` in tests. TCB is designed so that `TCB.reset!` fully tears down and rebuilds the configuration between tests. It shuts down the event bus, clears the event store, and re-registers all handlers.
 
-The `TCB.configure` block is stored and replayed on every `reset!`, so each test gets a fresh event bus and a clean event store automatically.
+The `TCB.configure` block is stored and replayed on every `reset!`. Each test gets a fresh event bus and a clean event store automatically.
 
 ### Rails initializer
 
@@ -512,14 +524,14 @@ Require it from `rails_helper.rb`:
 require "support/tcb"
 ```
 
-`TCB.reset!` replays the configure block — `Rails.env.test?` is re-evaluated each time, so `InMemory` gets a fresh instance on every reset.
+`TCB.reset!` replays the configure block. `Rails.env.test?` is re-evaluated each time, so `InMemory` gets a fresh instance on every reset.
 
 #### have_published
 
 ```ruby
-expect { Orders.place(order_id: 42, customer: "Alice") }.to have_published(Orders::OrderPlaced)
-expect { Orders.place(...) }.to have_published(Orders::OrderPlaced.new(order_id: 42, customer: "Alice"))
-expect { Orders.place(...) }.to have_published(Orders::OrderPlaced, within: 0.5)
+expect { Orders.place!(order_id: 42, customer: "Alice") }.to have_published(Orders::OrderPlaced)
+expect { Orders.place!(...) }.to have_published(Orders::OrderPlaced.new(order_id: 42, customer: "Alice"))
+expect { Orders.place!(...) }.to have_published(Orders::OrderPlaced, within: 0.5)
 ```
 
 #### poll_match
@@ -528,8 +540,6 @@ expect { Orders.place(...) }.to have_published(Orders::OrderPlaced, within: 0.5)
 expect { CALLED.include?(:reserve_inventory) }.to poll_match
 expect { Payment.completed? }.to poll_match(within: 2.0)
 ```
-
----
 
 ### Minitest
 
@@ -546,10 +556,10 @@ end
 #### assert_published
 
 ```ruby
-assert_published(Orders::OrderPlaced) { Orders.place(order_id: 42, customer: "Alice") }
-assert_published(Orders::OrderPlaced.new(order_id: 42, customer: "Alice")) { Orders.place(...) }
-assert_published(Orders::OrderPlaced, Notifications::WelcomeEmailQueued) { Orders.place(...) }
-assert_published(Orders::OrderPlaced, within: 0.5) { Orders.place(...) }
+assert_published(Orders::OrderPlaced) { Orders.place!(order_id: 42, customer: "Alice") }
+assert_published(Orders::OrderPlaced.new(order_id: 42, customer: "Alice")) { Orders.place!(...) }
+assert_published(Orders::OrderPlaced, Notifications::WelcomeEmailQueued) { Orders.place!(...) }
+assert_published(Orders::OrderPlaced, within: 0.5) { Orders.place!(...) }
 ```
 
 #### poll_assert
@@ -565,15 +575,15 @@ poll_assert("payment processed", within: 2.0) { Payment.completed? }
 
 TCB uses Ruby's `Data.define` for events and commands throughout. This is a deliberate architectural choice, not a convention.
 
-TCB embraces data coupling by design — events carry only data, never behavior. This enables a reactive architecture where domain modules respond to facts rather than calling each other directly, keeping your codebase decoupled and easy to reason about.
+TCB embraces data coupling by design. Events carry only data, never behavior. This enables a reactive architecture where domain modules respond to facts rather than calling each other directly, keeping your codebase decoupled and easy to reason about.
 
-**Immutability.** Events are facts — they cannot be changed after they happen. `Data.define` enforces this at the language level. There is no way to accidentally mutate an event in a handler.
+**Immutability.** Events are facts. They cannot be changed after they happen. `Data.define` enforces this at the language level. There is no way to accidentally mutate an event in a handler.
 
-**Explicit data coupling.** When you define `OrderPlaced = Data.define(:order_id, :customer)`, the attributes are the contract. Anyone reading the code sees exactly what an `OrderPlaced` event carries — no hidden state, no methods that obscure the data shape.
+**Explicit data coupling.** When you define `OrderPlaced = Data.define(:order_id, :customer)`, the attributes are the contract. Anyone reading the code sees exactly what an `OrderPlaced` event carries. No hidden state, no methods that obscure the data shape.
 
-**Value semantics.** Two `OrderPlaced` events with the same attributes are equal. This makes testing straightforward — no mocks, no stubs, just plain equality assertions.
+**Value semantics.** Two `OrderPlaced` events with the same attributes are equal. This makes testing straightforward. No mocks, no stubs, just plain equality assertions.
 
-**No inheritance tax.** `Data.define` requires no base class, no framework module. Your domain events are pure Ruby — they can be used anywhere without pulling TCB along.
+**No inheritance tax.** `Data.define` requires no base class, no framework module. Your domain events are pure Ruby. They can be used anywhere without pulling TCB along.
 
 ---
 
