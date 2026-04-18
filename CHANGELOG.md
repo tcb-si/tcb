@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TCB::RecordsEvents` — aggregate mixin for recording domain events
 - `TCB.record` — transaction boundary, returns recorded events
 - `TCB.publish` — explicit, caller-controlled event publication
-- `TCB.execute` — command bus with `validate!` convention and handler routing
+- `TCB.dispatch` — command bus with `validate!` convention and handler routing
 - `TCB::HandlesEvents` — declarative event reactions with `on / execute` DSL
 - `TCB::Configuration` — composition root, frozen after configuration
 - `TCB::EventStore::InMemory` — in-memory event store for tests
