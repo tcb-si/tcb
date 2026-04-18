@@ -62,11 +62,6 @@ module TCB
       ]
     end
 
-    def reset_handlers!
-      event_bus.reset
-      flush_domain_modules
-    end
-
     private
 
     def flush_domain_modules

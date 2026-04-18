@@ -95,8 +95,6 @@ module TCB
       @mutex.synchronize { @active_dispatches -= 1 }
     end
 
-    def reset = @registry.clear
-
     private
 
     def execute_handler(handler, event)
