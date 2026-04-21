@@ -111,8 +111,4 @@ module TCB
       domain_module.const_set(:EventRecord, klass)
     end
   end
-
-  def self.config
-    @config ||= Configuration.new
-  end
 end

@@ -44,5 +44,15 @@ module TCB
     ensure
       TCB.config.event_bus.force_shutdown
     end
+
+    def test_configured_returns_false_when_not_configured
+      TCB.instance_variable_set(:@config, nil)
+      refute TCB.configured?
+    end
+
+    def test_configured_returns_true_when_configured
+      TCB.configure { |c| c.event_bus = TCB::EventBus.new }
+      assert TCB.configured?
+    end
   end
 end

@@ -42,6 +42,14 @@ module TCB
     )
   end
 
+  def self.config
+    @config ||= Configuration.new
+  end
+
+  def self.configured?
+    !!@config
+  end
+
   def self.configure(&block)
     @configure_block = block
     yield config
@@ -49,8 +57,14 @@ module TCB
     config.freeze
   end
 
-  def self.reset!
-    @config.event_bus.force_shutdown
+  def self.reset!(graceful_shutdown_time: nil)
+    if configured?
+      if graceful_shutdown_time
+        @config.event_bus.shutdown(drain: true, timeout: graceful_shutdown_time)
+      else
+        @config.event_bus.force_shutdown
+      end
+    end
     @config = nil
     configure(&@configure_block) if @configure_block
   end

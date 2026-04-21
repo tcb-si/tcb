@@ -132,5 +132,17 @@ module TCB
       TCB.reset!
       assert_raises(TCB::ConfigurationError) { TCB.config.event_bus }
     end
+
+    def test_reset_with_graceful_shutdown_time_force_shuts_down_bus
+      original_bus = TCB.config.event_bus
+      TCB.reset!(graceful_shutdown_time: 0.1)
+      refute_same original_bus, TCB.config.event_bus
+    end
+
+    def test_reset_with_graceful_shutdown_time_when_not_configured
+      TCB.instance_variable_set(:@configure_block, nil)
+      TCB.instance_variable_set(:@config, nil)
+      assert_silent { TCB.reset!(graceful_shutdown_time: 5) }
+    end
   end
 end
