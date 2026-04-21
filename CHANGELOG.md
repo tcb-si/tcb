@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TCB.configured?` — predicate to check if TCB has been configured
 - `TCB.reset!(graceful_shutdown_time:)` — optional graceful bus drain before reset; defaults to `force_shutdown`
 
+### Changed
+
+- `TCB.record` — `within:` gracefully ignored if object does not respond to `.transaction`
+
 ## [0.5.0] - 2026-04-14
 
 ### Added

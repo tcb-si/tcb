@@ -16,7 +16,7 @@ module TCB
     end
 
     def call(within:, &block)
-      if within
+      if within.respond_to?(:transaction)
         within.transaction { execute(&block) }
       else
         execute(&block)

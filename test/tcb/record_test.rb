@@ -130,5 +130,13 @@ module TCB
       events = TCB.record(events: [OrderPlaced.new(order_id: 1, customer: "Alice")])
       assert_equal 1, events.size
     end
+
+    def test_record_without_transaction_adapter_works_normally
+      order = Order.new
+      events = TCB.record(events_from: [order], within: Object.new) do
+        order.place(order_id: 1, customer: "Alice")
+      end
+      assert_equal [OrderPlaced.new(order_id: 1, customer: "Alice")], events
+    end
   end
 end
