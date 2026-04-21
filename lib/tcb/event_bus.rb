@@ -1,25 +1,29 @@
 # frozen_string_literal: true
 
-require 'set'
-require_relative 'event_bus/running_strategy'
-require_relative 'event_bus/shutdown_strategy'
-require_relative 'event_bus/termination_signal_handler'
-require_relative 'event_bus/subscriber_registry'
+require "set"
+require_relative "event_bus/running_strategy"
+require_relative "event_bus/shutdown_strategy"
+require_relative "event_bus/termination_signal_handler"
+require_relative "event_bus/subscriber_registry"
 
 module TCB
   class EventBus
     class ShutdownError < StandardError; end
 
-    attr_reader :queue, :registry, :mutex,
-                :active_dispatches, :dispatcher, :events_processed_during_shutdown
+    attr_reader :queue, :registry, :mutex, :active_dispatches, :dispatcher,
+      :events_processed_during_shutdown, :max_queue_size
 
     def initialize(
       handle_signals: false,
       shutdown_timeout: 30.0,
       shutdown_signals: [:TERM, :INT],
-      on_signal: nil
+      on_signal: nil,
+      max_queue_size: nil,
+      high_water_mark: nil
     )
-      @queue = Queue.new
+      @queue = max_queue_size ? SizedQueue.new(max_queue_size) : Queue.new
+      @max_queue_size = max_queue_size
+      @pressure_monitor = QueuePressureMonitor.for(max_queue_size:, high_water_mark:)
       @registry = SubscriberRegistry.new
       @mutex = Mutex.new
       @active_dispatches = 0
@@ -32,6 +36,7 @@ module TCB
           break if event == :shutdown_sentinel
 
           dispatch(event)
+          dispatch(build_pressure_event) if high_water_mark_reached?
         end
       end
 
@@ -95,6 +100,8 @@ module TCB
       @mutex.synchronize { @active_dispatches -= 1 }
     end
 
+    def high_water_mark_reached? = @pressure_monitor.check?(@queue.size)
+
     private
 
     def execute_handler(handler, event)
@@ -113,6 +120,15 @@ module TCB
       else
         publish(failure_event)
       end
+    end
+
+    def build_pressure_event
+      EventBusQueuePressure.new(
+        queue_size: @queue.size,
+        max_queue_size: @max_queue_size,
+        occupancy: @queue.size.to_f / @max_queue_size,
+        occurred_at: Time.now
+      )
     end
   end
 end

@@ -7,11 +7,12 @@ module EventBusDSL
   # Setup & Initialization
 
   def create_event_bus(options = {})
-    @event_bus = TCB::EventBus.new
+    @event_bus = TCB::EventBus.new(**options)
 
     # Auto-subscribe to SubscriberInvocationFailed for test observability
     subscribe_to(TCB::SubscriberInvocationFailed) { |event| }
     subscribe_to(TCB::EventBusShutdown) { |event| }
+    subscribe_to(TCB::EventBusQueuePressure) { |event| }
     @handler_calls = Hash.new { |h, k| h[k] = [] }
     @named_handlers = {}
     @handler_call_order = []
@@ -547,6 +548,39 @@ module EventBusDSL
     end
 
     assert error_raised, "Expected block to raise a shutdown error"
+    self
+  end
+
+  def subscribe_with_counting_handler(event_class)
+    subscribe_to(event_class) { |_| }
+    self
+  end
+
+  def fill_queue(event_class, count:)
+    count.times.with_index(1) do |i|
+      publish_event(event_class.new(id: i, email: "fill#{i}@b.com"))
+    end
+    self
+  end
+
+  def assert_next_publish_blocks(event)
+    publisher = Thread.new { @event_bus.publish(event) }
+    sleep 0.1
+    assert_equal "sleep", publisher.status,
+      "Expected publish to block when queue is full, but thread status was: #{publisher.status}"
+    publisher.kill
+    self
+  end
+
+  def fill_queue_and_block_dispatcher(event_class)
+    # Queue.pop blocks handler until @dispatcher_latch << :go is called
+    @dispatcher_latch = Queue.new
+    subscribe_to(event_class) { |_| @dispatcher_latch.pop }
+    self
+  end
+
+  def release_dispatcher(count: 1)
+    count.times { @dispatcher_latch << :go }
     self
   end
 
