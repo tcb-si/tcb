@@ -3,12 +3,17 @@
 module TCB
   class EventBus
     class RunningStrategy
-      def initialize(event_bus)
+      def initialize(event_bus, sync: false)
         @event_bus = event_bus
+        @sync = sync
       end
 
       def publish(event)
-        @event_bus.queue << event
+        if @sync
+          @event_bus.dispatch(event)
+        else
+          @event_bus.queue << event
+        end
         event
       end
 

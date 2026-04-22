@@ -26,8 +26,7 @@ module EventBusDSL
   end
 
   def create_synchronous_bus
-    # For now, same as regular bus - we'll add sync mode later
-    create_event_bus(sync_mode: true)
+    create_event_bus(sync: true)
   end
 
   # Event Publication

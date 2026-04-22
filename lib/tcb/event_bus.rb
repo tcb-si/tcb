@@ -19,8 +19,10 @@ module TCB
       shutdown_signals: [:TERM, :INT],
       on_signal: nil,
       max_queue_size: nil,
-      high_water_mark: nil
+      high_water_mark: nil,
+      sync: false
     )
+      @sync = sync
       @queue = max_queue_size ? SizedQueue.new(max_queue_size) : Queue.new
       @max_queue_size = max_queue_size
       @pressure_monitor = QueuePressureMonitor.for(max_queue_size:, high_water_mark:)
@@ -28,15 +30,17 @@ module TCB
       @mutex = Mutex.new
       @active_dispatches = 0
       @events_processed_during_shutdown = 0
-      @execution_strategy = RunningStrategy.new(self)
+      @execution_strategy = RunningStrategy.new(self, sync: @sync)
 
-      @dispatcher = Thread.new do
-        loop do
-          event = @queue.pop
-          break if event == :shutdown_sentinel
+      unless @sync
+        @dispatcher = Thread.new do
+          loop do
+            event = @queue.pop
+            break if event == :shutdown_sentinel
 
-          dispatch(event)
-          dispatch(build_pressure_event) if high_water_mark_reached?
+            dispatch(event)
+            dispatch(build_pressure_event) if high_water_mark_reached?
+          end
         end
       end
 
