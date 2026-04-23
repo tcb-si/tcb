@@ -1,18 +1,20 @@
+# Domain modules — which bounded contexts exist
+# Add your domain modules here after generating them:
+#   rails generate tcb:event_store orders place_order:order_id,customer
+#   rails generate tcb:domain notifications send_welcome_email:user_id,email
+TCB.domain_modules = [
+  # Orders,
+  # Notifications,
+]
+
+# Infrastructure — how events are transported and stored
+# Runs on every Rails reload in development
 Rails.application.config.to_prepare do
   TCB.configure do |c|
     c.event_bus   = TCB::EventBus.new(
       handle_signals: true,
       shutdown_timeout: 10.0
     )
-    c.event_store = Rails.env.test? ? TCB::EventStore::InMemory.new
-                                    : TCB::EventStore::ActiveRecord.new
-
-    # Add your domain modules here after generating them:
-    #   rails generate tcb:event_store orders place_order:order_id,customer
-    #   rails generate tcb:domain notifications send_welcome_email:user_id,email
-    c.domain_modules = [
-      # Orders,
-      # Notifications
-    ]
+    c.event_store = TCB::EventStore::ActiveRecord.new
   end
 end

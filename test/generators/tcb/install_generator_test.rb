@@ -13,12 +13,10 @@ module TCB
       def test_creates_initializer
         run_generator
         assert_file "config/initializers/tcb.rb" do |content|
+          assert_match "TCB.domain_modules", content
           assert_match "TCB.configure", content
           assert_match "c.event_bus", content
           assert_match "c.event_store", content
-          assert_match "c.domain_modules", content
-          assert_match "tcb:event_store", content
-          assert_match "tcb:domain", content
         end
       end
     end

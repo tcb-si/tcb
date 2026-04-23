@@ -12,15 +12,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TCB::EventBus.new(sync: false)` — opt-in synchronous execution mode; handlers execute in caller thread, no dispatcher thread started, no polling required in tests
 - `TCB::EventBus.new(max_queue_size:, high_water_mark:)` — opt-in queue pressure signalling; emits `TCB::EventBusQueuePressure` event once per threshold crossing when queue depth reaches or exceeds `high_water_mark`
 - `TCB::EventBus.new(max_queue_size:)` — opt-in bounded queue via `SizedQueue`; publish blocks caller thread when queue is full, providing explicit backpressure signal
-- `TCB.configured?` — predicate to check if TCB has been configured
+- `TCB.configured?` — returns `false` if config does not exist or `event_bus` is not set
 - `TCB.reset!(graceful_shutdown_time:)` — optional graceful bus drain before reset; defaults to `force_shutdown`
+- `TCB.domain_modules=` — declare bounded contexts separately from infrastructure configuration
+- `Configuration#event_bus_configured?` — predicate used internally by `TCB.configured?`
 - `EventBus#initialize` — dispatcher thread setup extracted to `RunningStrategy#start`; signal handler setup extracted to private `install_signal_handlers`
 - `RunningStrategy` — accepts `sync:` keyword; `start` method owns dispatcher thread lifecycle; `build_pressure_event` moved from `EventBus` into `RunningStrategy`
 - `ShutdownStrategy` — `force_terminate` and `terminate_dispatcher` are no-op when dispatcher is nil (sync mode)
 
 ### Changed
 
+- `TCB.configure` — now configures infrastructure only (event bus, event store); domain modules declared separately via `TCB.domain_modules=`
+- `TCB.reset!` — no longer replays configure block; caller is responsible for reconfiguring after reset
 - `TCB.record` — `within:` gracefully ignored if object does not respond to `.transaction`
+
+### Removed
+
+- `TCB.configure` with `domain_modules:` as a single all-in-one configuration block — replaced by `TCB.domain_modules=` + `TCB.configure`
 
 ## [0.5.0] - 2026-04-14
 
