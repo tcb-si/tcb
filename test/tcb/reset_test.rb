@@ -22,7 +22,7 @@ module TCB
       CALLED.clear
       TCB.reset!
       TCB.domain_modules = [TestDomain]
-      TCB.configure_infrastructure do |c|
+      TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new
         c.event_store = TCB::EventStore::InMemory.new
       end
@@ -42,7 +42,7 @@ module TCB
     def test_reset_clears_event_bus_subscriptions
       TCB.reset!
       TCB.domain_modules = [TestDomain]
-      TCB.configure_infrastructure do |c|
+      TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new
         c.event_store = TCB::EventStore::InMemory.new
       end
@@ -53,7 +53,7 @@ module TCB
     def test_reset_calls_event_store_reset_when_supported
       TCB.reset!
       TCB.domain_modules = [TestDomain]
-      TCB.configure_infrastructure do |c|
+      TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new
         c.event_store = TCB::EventStore::InMemory.new
       end
@@ -64,7 +64,7 @@ module TCB
       TCB.config.event_store.append(stream_id: "orders|1", events: [OrderPlaced.new(order_id: 1, total: 10.0)])
       TCB.reset!
       TCB.domain_modules = [TestDomain]
-      TCB.configure_infrastructure do |c|
+      TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new
         c.event_store = TCB::EventStore::InMemory.new
       end

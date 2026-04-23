@@ -45,7 +45,7 @@ module TCB
     def setup
       CALLED.clear
       TCB.domain_modules = [TestOrders]
-      TCB.configure_infrastructure do |c|
+      TCB.configure do |c|
         c.event_bus = TCB::EventBus.new(sync: true)
       end
     end

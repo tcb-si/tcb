@@ -34,7 +34,7 @@ module TCB
     @domain_modules || []
   end
 
-  def self.configure_infrastructure(&block)
+  def self.configure(&block)
     @configure_block = block
     yield config
     config.domain_modules = @domain_modules || []

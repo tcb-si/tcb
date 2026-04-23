@@ -7,7 +7,7 @@ module TCB
     include TCB::MinitestHelpers
 
     def setup
-      TCB.configure_infrastructure do |c|
+      TCB.configure do |c|
         c.event_bus = TCB::EventBus.new
       end
     end

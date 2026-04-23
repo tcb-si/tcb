@@ -49,7 +49,7 @@ module TCB
 
     def test_event_record_defined_for_module_with_persist
       TCB.domain_modules = [Invoices]
-      TCB.configure_infrastructure do |c|
+      TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new(sync: true)
         c.event_store = TCB::EventStore::ActiveRecord.new
       end
@@ -59,7 +59,7 @@ module TCB
 
     def test_event_record_has_correct_table_name
       TCB.domain_modules = [Invoices]
-      TCB.configure_infrastructure do |c|
+      TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new(sync: true)
         c.event_store = TCB::EventStore::ActiveRecord.new
       end
@@ -69,7 +69,7 @@ module TCB
 
     def test_event_record_inherits_from_active_record
       TCB.domain_modules = [Invoices]
-      TCB.configure_infrastructure do |c|
+      TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new(sync: true)
         c.event_store = TCB::EventStore::ActiveRecord.new
       end
@@ -82,7 +82,7 @@ module TCB
       Invoices.const_set(:EventRecord, sentinel)
 
       TCB.domain_modules = [Invoices]
-      TCB.configure_infrastructure do |c|
+      TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new(sync: true)
         c.event_store = TCB::EventStore::ActiveRecord.new
       end
@@ -92,7 +92,7 @@ module TCB
 
     def test_module_without_persist_does_not_get_event_record
       TCB.domain_modules = [WithoutPersist]
-      TCB.configure_infrastructure do |c|
+      TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new(sync: true)
         c.event_store = TCB::EventStore::ActiveRecord.new
       end
@@ -108,7 +108,7 @@ module TCB
       mod.persist(mod.events(OrderPlaced, stream_id_from_event: :order_id))
 
       TCB.domain_modules = [mod]
-      TCB.configure_infrastructure do |c|
+      TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new(sync: true)
         c.event_store = TCB::EventStore::ActiveRecord.new
       end

@@ -36,7 +36,7 @@ module TCB
 
     def setup
       TCB.domain_modules = [TestOrders, TestPayments]
-      TCB.configure_infrastructure do |c|
+      TCB.configure do |c|
         c.event_bus      = TCB::EventBus.new(sync: true)
         c.event_store    = TCB::EventStore::InMemory.new
       end

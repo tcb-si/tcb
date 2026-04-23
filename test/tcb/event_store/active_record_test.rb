@@ -29,7 +29,7 @@ module TCB
       end
 
       TCB.domain_modules = [Orders]
-      TCB.configure_infrastructure do |c|
+      TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new(sync: true)
         c.event_store = TCB::EventStore::ActiveRecord.new
       end
