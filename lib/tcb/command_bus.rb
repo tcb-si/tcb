@@ -2,10 +2,13 @@
 module TCB
   CommandHandlerNotFound = Class.new(StandardError)
 
-  def self.dispatch(command)
+  def self.dispatch(command, correlation_id: SecureRandom.uuid)
     validate!(command)
     handler = resolve_handler(command)
+    Thread.current[:tcb_correlation_id] = correlation_id
     handler.new.call(command)
+  ensure
+    Thread.current[:tcb_correlation_id] = nil
   end
 
   def self.validate!(command)

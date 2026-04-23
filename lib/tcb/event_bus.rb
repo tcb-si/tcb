@@ -71,14 +71,15 @@ module TCB
     end
 
     # Public for strategy access
-    def dispatch(event)
+    def dispatch(event_or_envelope)
       @mutex.synchronize { @active_dispatches += 1 }
+      envelope = TCB::Envelope.coerce(event_or_envelope)
 
       @events_processed_during_shutdown += 1 if shutdown?
-      handlers = @registry.handlers_for(event.class)
+      handlers = @registry.handlers_for(envelope.event.class)
 
       handlers.each do |handler|
-        execute_handler(handler, event)
+        execute_handler(handler, envelope)
       end
     ensure
       @mutex.synchronize { @active_dispatches -= 1 }
@@ -88,15 +89,15 @@ module TCB
 
     private
 
-    def execute_handler(handler, event)
-      handler.call(event)
+    def execute_handler(handler, envelope)
+      handler.call(envelope)
     rescue => e
-      return if event.is_a?(SubscriberInvocationFailed)
+      return if envelope.event.is_a?(SubscriberInvocationFailed)
 
       failure_event = SubscriberInvocationFailed.build(
-        handler: handler,
-        original_event: event,
-        error: e
+        handler:        handler,
+        original_event: envelope.event,
+        error:          e
       )
 
       if shutdown?

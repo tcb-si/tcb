@@ -20,7 +20,7 @@ module TCB
       events = TCB.record(events_from: [order]) do
         order.place(order_id: 1, customer: "Alice")
       end
-      assert_equal [OrderPlaced.new(order_id: 1, customer: "Alice")], events
+      assert_equal [OrderPlaced.new(order_id: 1, customer: "Alice")], events.map(&:event)
     end
 
     def test_record_returns_events_from_multiple_events_from
@@ -29,7 +29,7 @@ module TCB
       events = TCB.record(events_from: [order, inventory]) do
         order.place(order_id: 1, customer: "Alice")
         inventory.reserve(item_id: 42)
-      end
+      end.map(&:event)
       assert_includes events, OrderPlaced.new(order_id: 1, customer: "Alice")
       assert_includes events, InventoryReserved.new(item_id: 42)
     end
@@ -73,7 +73,7 @@ module TCB
       events = TCB.record(events_from: [order]) do
         order.place(order_id: 1, customer: "Alice")
       end
-      assert_equal [OrderPlaced.new(order_id: 1, customer: "Alice")], events
+      assert_equal [OrderPlaced.new(order_id: 1, customer: "Alice")], events.map(&:event)
     end
 
     def test_record_rolls_back_transaction_on_exception
@@ -109,14 +109,14 @@ module TCB
 
     def test_record_accepts_direct_events
       events = TCB.record(events: [OrderPlaced.new(order_id: 1, customer: "Alice")])
-      assert_equal [OrderPlaced.new(order_id: 1, customer: "Alice")], events
+      assert_equal [OrderPlaced.new(order_id: 1, customer: "Alice")], events.map(&:event)
     end
 
     def test_record_combines_events_from_and_direct_events
       order = Order.new
       events = TCB.record(events_from: [order], events: [InventoryReserved.new(item_id: 42)]) do
         order.place(order_id: 1, customer: "Alice")
-      end
+      end.map(&:event)
       assert_includes events, OrderPlaced.new(order_id: 1, customer: "Alice")
       assert_includes events, InventoryReserved.new(item_id: 42)
       assert_equal 2, events.size
@@ -135,7 +135,7 @@ module TCB
       order = Order.new
       events = TCB.record(events_from: [order], within: Object.new) do
         order.place(order_id: 1, customer: "Alice")
-      end
+      end.map(&:event)
       assert_equal [OrderPlaced.new(order_id: 1, customer: "Alice")], events
     end
   end

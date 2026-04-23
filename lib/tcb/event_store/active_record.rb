@@ -9,7 +9,7 @@ module TCB
         @mutex = Mutex.new
       end
 
-      def append(stream_id:, events:, occurred_at: Time.now)
+      def append(stream_id:, events:, occurred_at: Time.now, correlation_id: nil, causation_id: nil)
         @mutex.synchronize do
           next_ver = next_version(stream_id)
 
@@ -17,20 +17,24 @@ module TCB
             event_id = SecureRandom.uuid
 
             event_record_for(stream_id).create!(
-              event_id:    event_id,
-              stream_id:   stream_id,
-              version:     version,
-              event_type:  event.class.name,
-              payload:     serialize(event),
-              occurred_at: occurred_at
+              event_id:       event_id,
+              stream_id:      stream_id,
+              version:        version,
+              event_type:     event.class.name,
+              payload:        serialize(event),
+              occurred_at:    occurred_at,
+              correlation_id: correlation_id,
+              causation_id:   causation_id
             )
 
-            EventStreamEnvelope.new(
-              event:       event,
-              event_id:    event_id,
-              stream_id:   stream_id,
-              version:     version,
-              occurred_at: occurred_at
+            TCB::Envelope.new(
+              event:          event,
+              event_id:       event_id,
+              stream_id:      stream_id,
+              version:        version,
+              occurred_at:    occurred_at,
+              correlation_id: correlation_id,
+              causation_id:   causation_id
             )
           end
 
@@ -49,12 +53,14 @@ module TCB
         scope = scope.limit(limit) if limit
 
         scope.map do |record|
-          EventStreamEnvelope.new(
-            event:       deserialize(record.payload),
-            event_id:    record.event_id,
-            stream_id:   record.stream_id,
-            version:     record.version,
-            occurred_at: record.occurred_at
+          TCB::Envelope.new(
+            event:          deserialize(record.payload),
+            event_id:       record.event_id,
+            stream_id:      record.stream_id,
+            version:        record.version,
+            occurred_at:    record.occurred_at,
+            correlation_id: record.correlation_id,
+            causation_id:   record.causation_id
           )
         end
       end

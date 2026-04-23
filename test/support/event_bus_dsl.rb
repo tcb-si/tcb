@@ -593,8 +593,9 @@ module EventBusDSL
   private
 
   def wrap_handler(event_class, handler_id, original_handler)
-    proc do |event|
+    proc do |envelope|
       begin
+        event = envelope.is_a?(TCB::Envelope) ? envelope.event : envelope
         @handler_thread_ids[event_class] << Thread.current.object_id
         original_handler.call(event)
         @handler_calls[event_class] << event

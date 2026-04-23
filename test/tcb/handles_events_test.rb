@@ -83,7 +83,7 @@ module TCB
 
     def test_failing_handler_does_not_prevent_other_handlers
       failures = []
-      TCB.config.event_bus.subscribe(TCB::SubscriberInvocationFailed) { |e| failures << e }
+      TCB.config.event_bus.subscribe(TCB::SubscriberInvocationFailed) { |e| failures << (e.is_a?(TCB::Envelope) ? e.event : e) }
 
       TCB.publish(TestOrders::FailureAnticipated.new(order_id: 1))
 

@@ -18,14 +18,18 @@ module TCB
     def setup
       ActiveRecord::Schema.define do
         create_table :orders_events, force: :cascade do |t|
-          t.string   :event_id,    null: false
-          t.string   :stream_id,   null: false
-          t.integer  :version,     null: false
-          t.string   :event_type,  null: false
-          t.text     :payload,     null: false
-          t.datetime :occurred_at, null: false
+          t.string   :event_id,       null: false
+          t.string   :stream_id,      null: false
+          t.integer  :version,        null: false
+          t.string   :event_type,     null: false
+          t.text     :payload,        null: false
+          t.datetime :occurred_at,    null: false
+          t.string   :correlation_id
+          t.string   :causation_id
         end
         add_index :orders_events, [:stream_id, :version], unique: true, if_not_exists: true
+        add_index :orders_events, :event_id,              unique: true, if_not_exists: true
+        add_index :orders_events, :correlation_id,                      if_not_exists: true
       end
 
       TCB.domain_modules = [Orders]
@@ -48,7 +52,7 @@ module TCB
     def test_append_returns_envelopes
       envelopes = store.append(stream_id: "orders|42", events: [OrderPlaced.new(order_id: 42, total: 100.0)])
       assert_equal 1, envelopes.size
-      assert_instance_of EventStore::EventStreamEnvelope, envelopes.first
+      assert_instance_of TCB::Envelope, envelopes.first
     end
 
     def test_append_envelope_contains_original_event
@@ -185,6 +189,18 @@ module TCB
       threads.each(&:join)
       versions = store.read("orders|42").map(&:version).sort
       assert_equal (1..10).to_a, versions
+    end
+
+    def test_append_persists_correlation_id
+      store.append(stream_id: "orders|42", events: [OrderPlaced.new(order_id: 42, total: 100.0)], correlation_id: "corr-123")
+      envelope = store.read("orders|42").first
+      assert_equal "corr-123", envelope.correlation_id
+    end
+
+    def test_append_persists_causation_id
+      store.append(stream_id: "orders|42", events: [OrderPlaced.new(order_id: 42, total: 100.0)], causation_id: "caus-456")
+      envelope = store.read("orders|42").first
+      assert_equal "caus-456", envelope.causation_id
     end
 
     private

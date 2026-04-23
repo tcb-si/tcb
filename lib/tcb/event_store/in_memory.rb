@@ -10,15 +10,17 @@ module TCB
         @mutex = Mutex.new
       end
 
-      def append(stream_id:, events:, occurred_at: Time.now)
+      def append(stream_id:, events:, occurred_at: Time.now, correlation_id: nil, causation_id: nil)
         @mutex.synchronize do
           envelopes = events.map.with_index(next_version(stream_id)) do |event, version|
-            EventStreamEnvelope.new(
-              event: event,
-              event_id: SecureRandom.uuid,
-              stream_id: stream_id,
-              version: version,
-              occurred_at: occurred_at
+            Envelope.new(
+              event:          event,
+              event_id:       SecureRandom.uuid,
+              stream_id:      stream_id,
+              version:        version,
+              occurred_at:    occurred_at,
+              correlation_id: correlation_id,
+              causation_id:   causation_id
             )
           end
           @streams[stream_id].concat(envelopes)

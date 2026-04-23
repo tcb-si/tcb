@@ -60,12 +60,12 @@ module TCB
     end
 
     def test_dispatch_calls_registered_handler
-      events = TCB.dispatch(PlaceOrder.new(order_id: 1, customer: "Alice"))
+      events = TCB.dispatch(PlaceOrder.new(order_id: 1, customer: "Alice")).map(&:event)
       assert_includes events, OrderPlaced.new(order_id: 1, customer: "Alice")
     end
 
     def test_dispatch_returns_events_from_handler
-      events = TCB.dispatch(PlaceOrder.new(order_id: 1, customer: "Alice"))
+      events = TCB.dispatch(PlaceOrder.new(order_id: 1, customer: "Alice")).map(&:event)
       assert_equal [OrderPlaced.new(order_id: 1, customer: "Alice")], events
     end
 

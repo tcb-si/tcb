@@ -3,19 +3,26 @@ require_relative '../test_helper'
 module TCB
   class EnvelopeTest < Minitest::Test
 
-    def test_envelope_is_alias_for_event_stream_envelope
-      assert_equal TCB::EventStore::EventStreamEnvelope, TCB::Envelope
+    def test_envelope_has_correlation_id
+      envelope = TCB::Envelope.new(
+        event: OrderPlaced.new(order_id: 1, total: 100.0),
+        event_id: "abc-123", stream_id: "orders|1",
+        version: 1, occurred_at: Time.now,
+        correlation_id: "corr-xyz", causation_id: nil
+      )
+      assert_equal "corr-xyz", envelope.correlation_id
+      assert_nil envelope.causation_id
     end
 
-    def test_envelope_can_be_instantiated_directly
+    def test_envelope_correlation_and_causation_default_to_nil
       envelope = TCB::Envelope.new(
-        event:       OrderPlaced.new(order_id: 1, total: 100.0),
-        event_id:    "abc-123",
-        stream_id:   "orders|1",
-        version:     1,
-        occurred_at: Time.now
+        event: OrderPlaced.new(order_id: 1, total: 100.0),
+        event_id: "abc-123", stream_id: "orders|1",
+        version: 1, occurred_at: Time.now,
+        correlation_id: nil, causation_id: nil
       )
-      assert_instance_of TCB::EventStore::EventStreamEnvelope, envelope
+      assert_nil envelope.correlation_id
+      assert_nil envelope.causation_id
     end
   end
 end

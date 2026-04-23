@@ -15,8 +15,8 @@ module TCB
       def with_subscriptions(*event_classes)
         captured = Hash.new { |h, k| h[k] = [] }
         subscriptions = event_classes.map do |event_class|
-          TCB.config.event_bus.subscribe(event_class) do |event|
-            captured[event_class] << event
+          TCB.config.event_bus.subscribe(event_class) do |envelope|
+            captured[event_class] << (envelope.is_a?(TCB::Envelope) ? envelope.event : envelope)
           end
         end
         yield captured

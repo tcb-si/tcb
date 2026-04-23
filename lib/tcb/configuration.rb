@@ -74,8 +74,13 @@ module TCB
 
         domain_module.event_handler_registrations.each do |registration|
           registration.handlers.each do |handler|
-            event_bus.subscribe(registration.event_class) do |event|
-              handler.new.call(event)
+            event_bus.subscribe(registration.event_class) do |envelope|
+              Thread.current[:tcb_correlation_id] = envelope.correlation_id
+              Thread.current[:tcb_causation_id]   = envelope.event_id
+              handler.new.call(envelope.event)
+            ensure
+              Thread.current[:tcb_correlation_id] = nil
+              Thread.current[:tcb_causation_id]   = nil
             end
           end
         end

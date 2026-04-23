@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
+require_relative "tcb/envelope"
 require_relative "tcb/minitest_helpers"
 require_relative "tcb/domain_context"
 require_relative "tcb/event_query"
 require_relative "tcb/event_store/active_record"
-require_relative "tcb/event_store/event_stream_envelope"
 require_relative "tcb/event_store/in_memory"
 require_relative "tcb/stream_id"
 require_relative "tcb/handles_events"
@@ -24,7 +24,6 @@ require_relative "tcb/event_bus"
 require_relative "tcb/version"
 
 module TCB
-  Envelope = EventStore::EventStreamEnvelope
 
   def self.domain_modules=(modules)
     @domain_modules = modules

@@ -17,7 +17,7 @@ module TCB
     def test_append_returns_envelopes
       envelopes = @store.append(stream_id: "orders|42", events: [OrderPlaced.new(order_id: 42, total: 100.0)])
       assert_equal 1, envelopes.size
-      assert_instance_of EventStore::EventStreamEnvelope, envelopes.first
+      assert_instance_of TCB::Envelope, envelopes.first
     end
 
     def test_append_envelope_contains_original_event

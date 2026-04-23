@@ -1,14 +1,18 @@
 class <%= migration_class_name %> < ActiveRecord::Migration[8.0]
   def change
     create_table :<%= table_name %> do |t|
-      t.string   :event_id,    null: false
-      t.string   :stream_id,   null: false
-      t.integer  :version,     null: false
-      t.string   :event_type,  null: false
-      t.text     :payload,     null: false
-      t.datetime :occurred_at, null: false
+      t.string   :event_id,       null: false
+      t.string   :stream_id,      null: false
+      t.integer  :version,        null: false
+      t.string   :event_type,     null: false
+      t.text     :payload,        null: false
+      t.datetime :occurred_at,    null: false
+      t.string   :correlation_id
+      t.string   :causation_id
     end
 
     add_index :<%= table_name %>, [:stream_id, :version], unique: true
+    add_index :<%= table_name %>, :event_id,              unique: true
+    add_index :<%= table_name %>, :correlation_id
   end
 end
