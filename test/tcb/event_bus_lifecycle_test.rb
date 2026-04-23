@@ -175,5 +175,19 @@ module TCB
         .assert_shutdown_completed_event_published
         .assert_bus_shutdown
     end
+
+    # Test: force_shutdown — dispatcher thread je mrtev po vrnitvi
+    def test_force_shutdown_dispatcher_thread_dead_after_return
+      force_shutdown_bus
+        .assert_dispatcher_thread_dead
+    end
+
+    # Test: graceful shutdown timeout — dispatcher thread je mrtev po vrnitvi
+    def test_shutdown_timeout_dispatcher_thread_dead_after_return
+      subscribe_to(UserRegistered) { |event| sleep 10.0 }
+        .publish_event(UserRegistered.new(id: 1, email: "test@example.com"))
+        .shutdown_bus(drain: true, timeout: 0.1)
+        .assert_dispatcher_thread_dead
+    end
   end
 end

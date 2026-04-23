@@ -16,7 +16,7 @@ module TCB
     end
 
     def setup
-      TCB.instance_variable_set(:@config, nil)
+      TCB.reset!
       ActiveRecord::Schema.define do
         create_table :invoices_events, force: :cascade do |t|
           t.string   :event_id,    null: false
@@ -43,8 +43,7 @@ module TCB
     end
 
     def teardown
-      TCB.config.event_bus.force_shutdown rescue nil
-      TCB.instance_variable_set(:@config, nil)
+      TCB.reset!
       Invoices.send(:remove_const, :EventRecord) if Invoices.const_defined?(:EventRecord, false)
     end
 

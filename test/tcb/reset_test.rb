@@ -22,7 +22,7 @@ module TCB
 
     def setup
       CALLED.clear
-      TCB.instance_variable_set(:@config, nil)
+      TCB.reset!
       TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new
         c.event_store = TCB::EventStore::InMemory.new
@@ -31,44 +31,45 @@ module TCB
     end
 
     def teardown
-      TCB.config.event_bus.force_shutdown rescue nil  # ← rescue nil
-      TCB.instance_variable_set(:@config, nil)
+      TCB.reset!
     end
 
     # TCB.reset!
-
-    def test_reset_clears_event_bus_subscriptions
-      TCB.reset!
-      handlers = TCB.config.event_bus.registry.handlers_for(TestDomain::SomethingHappened)
-      assert_equal 1, handlers.size
-    end
-
-    def test_reset_re_registers_handlers_from_config
-      TCB.reset!
-      TCB.publish(TestDomain::SomethingHappened.new(id: 1))
-      poll_assert("handler called after reset") { CALLED.include?(:handled) }
-    end
-
-    def test_reset_does_not_duplicate_subscriptions
-      TCB.reset!
-      TCB.reset!
-      handlers = TCB.config.event_bus.registry.handlers_for(TestDomain::SomethingHappened)
-      assert_equal 1, handlers.size
-    end
 
     def test_reset_works_on_frozen_config
       assert TCB.config.frozen?
       assert_silent { TCB.reset! }
     end
 
+    def test_reset_clears_event_bus_subscriptions
+      TCB.reset!
+      TCB.configure do |c|
+        c.event_bus   = TCB::EventBus.new
+        c.event_store = TCB::EventStore::InMemory.new
+        c.domain_modules = [TestDomain]
+      end
+      handlers = TCB.config.event_bus.registry.handlers_for(TestDomain::SomethingHappened)
+      assert_equal 1, handlers.size
+    end
+
     def test_reset_calls_event_store_reset_when_supported
       TCB.reset!
+      TCB.configure do |c|
+        c.event_bus   = TCB::EventBus.new
+        c.event_store = TCB::EventStore::InMemory.new
+        c.domain_modules = [TestDomain]
+      end
       assert_equal [], TCB.config.event_store.read("any|stream")
     end
 
     def test_reset_clears_event_store_data
       TCB.config.event_store.append(stream_id: "orders|1", events: [OrderPlaced.new(order_id: 1, total: 10.0)])
       TCB.reset!
+      TCB.configure do |c|
+        c.event_bus   = TCB::EventBus.new
+        c.event_store = TCB::EventStore::InMemory.new
+        c.domain_modules = [TestDomain]
+      end
       assert_equal [], TCB.config.event_store.read("orders|1")
     end
 
@@ -115,28 +116,10 @@ module TCB
       assert_equal 1, envelopes.first.version
     end
 
-    def test_reset_reconfigures_from_original_block
-      # po reset! je config svež, ne frozen
-      TCB.reset!
-      assert TCB.config.frozen?  # še ni konfiguriran — ali...
-    end
-
-    def test_reset_creates_fresh_event_bus
-      original_bus = TCB.config.event_bus
-      TCB.reset!
-      refute_same original_bus, TCB.config.event_bus
-    end
-
     def test_reset_without_configure_block_clears_config
       TCB.instance_variable_set(:@configure_block, nil)
       TCB.reset!
       assert_raises(TCB::ConfigurationError) { TCB.config.event_bus }
-    end
-
-    def test_reset_with_graceful_shutdown_time_force_shuts_down_bus
-      original_bus = TCB.config.event_bus
-      TCB.reset!(graceful_shutdown_time: 0.1)
-      refute_same original_bus, TCB.config.event_bus
     end
 
     def test_reset_with_graceful_shutdown_time_when_not_configured

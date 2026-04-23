@@ -49,7 +49,7 @@ module TCB
   end
 
   def self.configured?
-    !!@config
+    !!@config && @config.event_bus_configured?
   end
 
   def self.configure(&block)
@@ -61,13 +61,11 @@ module TCB
 
   def self.reset!(graceful_shutdown_time: nil)
     if configured?
-      if graceful_shutdown_time
-        @config.event_bus.shutdown(drain: true, timeout: graceful_shutdown_time)
-      else
+      graceful_shutdown_time ?
+        @config.event_bus.shutdown(drain: true, timeout: graceful_shutdown_time) :
         @config.event_bus.force_shutdown
-      end
     end
     @config = nil
-    configure(&@configure_block) if @configure_block
+    @configure_block = nil  # ← ne replay-a več
   end
 end

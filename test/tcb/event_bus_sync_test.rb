@@ -42,5 +42,11 @@ module TCB
         .publish_event(UserRegistered.new(id: 1, email: "sync@example.com"))
         .assert_subscriber_invocation_failed_published(UserRegistered)
     end
+
+    # Test: force_shutdown na sync bus je safe — ni dispatcher threada
+    def test_force_shutdown_on_sync_bus_is_safe
+      assert_silent { force_shutdown_bus }
+      assert_dispatcher_thread_dead
+    end
   end
 end

@@ -62,6 +62,10 @@ module TCB
       ]
     end
 
+    def event_bus_configured?
+      !!@event_bus
+    end
+
     private
 
     def flush_domain_modules

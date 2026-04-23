@@ -54,5 +54,10 @@ module TCB
       TCB.configure { |c| c.event_bus = TCB::EventBus.new }
       assert TCB.configured?
     end
+
+    def test_configured_returns_false_when_config_exists_but_event_bus_not_set
+      TCB.instance_variable_set(:@config, TCB::Configuration.new)
+      refute TCB.configured?
+    end
   end
 end

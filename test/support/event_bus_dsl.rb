@@ -448,6 +448,13 @@ module EventBusDSL
     self
   end
 
+  def assert_dispatcher_thread_dead
+    dispatcher = @event_bus.dispatcher
+    assert(dispatcher.nil? || !dispatcher.alive?,
+      "Expected dispatcher thread to be dead after shutdown, but it is still alive")
+    self
+  end
+
   def assert_rejects_events_after_shutdown
     error_raised = false
     begin
