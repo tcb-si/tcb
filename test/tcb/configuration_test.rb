@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative '../test_helper'
 
 module TCB
@@ -12,7 +14,7 @@ module TCB
     def test_domain_modules_stores_modules_without_configuring
       TCB.domain_modules = [SomeModule]
       assert_equal [SomeModule], TCB.domain_modules
-      refute TCB.configured?  # bus še ni konfiguriran
+      refute TCB.configured?
     end
 
     def test_configure_sets_event_bus
@@ -74,14 +76,6 @@ module TCB
       assert_raises(TCB::ConfigurationError) do
         TCB.config.event_bus
       end
-    end
-
-    def test_configure_sets_event_bus
-      bus = TCB::EventBus.new
-      TCB.configure { |c| c.event_bus = bus }
-      assert_equal bus, TCB.config.event_bus
-    ensure
-      bus.force_shutdown
     end
 
     def test_config_is_frozen_after_configure
