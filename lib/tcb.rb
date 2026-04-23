@@ -35,7 +35,6 @@ module TCB
   end
 
   def self.configure(&block)
-    @configure_block = block
     yield config
     config.domain_modules = @domain_modules || []
     config.permitted_serialization_classes
@@ -75,6 +74,5 @@ module TCB
         @config.event_bus.force_shutdown
     end
     @config = nil
-    @configure_block = nil
   end
 end
