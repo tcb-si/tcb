@@ -44,7 +44,44 @@ end
 bus.publish(UserRegistered.new(id: 1, email: "alice@example.com"))
 ```
 
-### `TCB::HandlesEvents`
+### Execution model
+
+TCB::EventBus uses a single background thread to process events. Publishing is non-blocking — the event is placed on a queue and control returns to the caller immediately. The dispatcher thread processes events in FIFO order. Handlers for a given event execute sequentially within the dispatcher thread.
+
+This design favors determinism and simplicity: events are always processed in the order they were published, and handlers cannot race with each other.
+
+For tests and simple use cases, `sync: true` executes handlers in the caller thread immediately — no background thread, no queue:
+
+```ruby
+bus = TCB::EventBus.new(sync: true)
+```
+
+### Delivery guarantees
+
+TCB guarantees:
+- Events published to the bus will be dispatched to all registered handlers, in the order they were published, as long as the process remains alive.
+- If `TCB.record` is used before `TCB.publish`, events are persisted to the event store before any handler runs.
+
+TCB does not guarantee:
+- That published events will be processed if the process crashes after publish but before handlers complete.
+- At-least-once, at-most-once, or exactly-once delivery.
+- Retry on handler failure. Failed handlers emit `TCB::SubscriberInvocationFailed`. Retry is the responsibility of the application.
+
+If stronger delivery guarantees are required, use a durable external queue (SolidQueue, Sidekiq, etc.) and trigger TCB handlers from jobs.
+
+### Backpressure
+
+The event queue is unbounded by default. If handlers are slower than the rate of publishing, the queue will grow without limit. For production systems under sustained load, set `max_queue_size:` to apply backpressure:
+
+```ruby
+TCB::EventBus.new(max_queue_size: 10_000)
+```
+
+When the queue is full, `publish` blocks until space is available. The right value depends on your event volume and handler latency — measure before deciding.
+
+---
+
+## TCB::HandlesEvents
 
 Instead of block handlers, reactions can be declared as classes inside a module. This keeps handlers close to the domain and readable at a glance.
 
@@ -74,15 +111,15 @@ Event classes can come from anywhere. `TCB::HandlesEvents` only cares that they 
 Register at configuration time:
 
 ```ruby
+TCB.domain_modules = [ Notifications ]
 TCB.configure do |c|
-  c.event_bus      = TCB::EventBus.new
-  c.domain_modules = [Notifications]
+  c.event_bus = TCB::EventBus.new
 end
 
 TCB.publish(Auth::UserRegistered.new(id: 1, email: "alice@example.com"))
 ```
 
-Handlers execute asynchronously in a background thread. Each handler is isolated. One failure does not prevent others from executing.
+Each handler is isolated. One failure does not prevent others from executing.
 
 ---
 
@@ -114,9 +151,9 @@ module Orders
   handle PlaceOrder, with(PlaceOrderHandler)
 end
 
+TCB.domain_modules = [ Orders ]
 TCB.configure do |c|
-  c.event_bus      = TCB::EventBus.new
-  c.domain_modules = [Orders]
+  c.event_bus = TCB::EventBus.new
 end
 
 TCB.dispatch(PlaceOrder.new(order_id: 42, customer: "Alice"))
@@ -153,6 +190,15 @@ The domain module is a boundary. Everything inside speaks the domain language. N
 module Orders
   include TCB::Domain
 
+  # Facade
+  def self.place!(order_id:, customer:)
+    TCB.dispatch(PlaceOrder.new(order_id: order_id, customer: customer))
+  end
+
+  def self.cancel!(order_id:, reason:)
+    TCB.dispatch(CancelOrder.new(order_id: order_id, reason: reason))
+  end
+
   # Events
   OrderPlaced    = Data.define(:order_id, :customer)
   OrderCancelled = Data.define(:order_id, :reason)
@@ -184,15 +230,6 @@ module Orders
   # Reactions
   on OrderPlaced,    react_with(ReserveInventory, ChargePayment)
   on OrderCancelled, react_with(RefundPayment)
-
-  # Facade
-  def self.place!(order_id:, customer:)
-    TCB.dispatch(PlaceOrder.new(order_id: order_id, customer: customer))
-  end
-
-  def self.cancel!(order_id:, reason:)
-    TCB.dispatch(CancelOrder.new(order_id: order_id, reason: reason))
-  end
 end
 ```
 
@@ -315,24 +352,72 @@ end
 
 ## Configuration
 
-Each domain module gets its own database table. Domains stay isolated at the persistence level. This is a step toward event sourcing. Every business-significant moment is recorded, queryable, and replayable.
+### Domain modules
+
+Domain modules are the bounded contexts of your application. Declare them once, at the top level — before infrastructure is configured:
+
+```ruby
+# config/initializers/tcb.rb
+TCB.domain_modules = [Orders, Notifications]
+```
+
+This is the only place TCB needs to know about your domain modules. All reactions, persistence rules, and handler mappings are declared inside each module itself.
+
+### Infrastructure
+
+Infrastructure is environment-specific. Configure it in each environment file so the differences are explicit and co-located with other environment settings:
+
+```ruby
+# config/environments/development.rb
+Rails.application.config.to_prepare do
+  TCB.reset!
+  TCB.configure do |c|
+    c.event_bus   = TCB::EventBus.new(
+      handle_signals: false,   # Rails manages process signals in development
+      shutdown_timeout: 10.0
+    )
+    c.event_store = TCB::EventStore::ActiveRecord.new
+  end
+end
+```
+
+`to_prepare` runs after every Rails reload. `TCB.reset!` shuts down the previous bus before configuring a new one. Without it, each reload would leak a dispatcher thread.
+
+```ruby
+# config/environments/production.rb
+Rails.application.config.to_prepare do
+  TCB.reset!(graceful_shutdown_time: 10.0)
+  TCB.configure do |c|
+    c.event_bus   = TCB::EventBus.new(
+      handle_signals: true,
+      shutdown_timeout: 30.0
+    )
+    c.event_store = TCB::EventStore::ActiveRecord.new
+  end
+end
+```
+
+`handle_signals: true` installs SIGTERM/SIGINT handlers for graceful shutdown. `graceful_shutdown_time` on `reset!` gives the previous bus time to drain before replacing it.
+
+```ruby
+# config/environments/test.rb
+Rails.application.config.after_initialize do
+  TCB.configure do |c|
+    c.event_bus   = TCB::EventBus.new(sync: true)
+    c.event_store = TCB::EventStore::InMemory.new
+  end
+end
+```
+
+`sync: true` executes handlers in the caller thread — no background thread, no polling. `after_initialize` runs once at boot. Between tests, call `TCB.reset!` to get a fresh bus and store.
+
+Each domain module gets its own database table. Domains stay isolated at the persistence level:
 
 | Module | Table |
 |---|---|
 | `Orders` | `orders_events` |
 | `Payments` | `payments_events` |
 | `Payments::Charges` | `payments_charges_events` |
-
-```ruby
-TCB.configure do |c|
-  c.event_bus      = TCB::EventBus.new
-  c.event_store    = TCB::EventStore::ActiveRecord.new
-  c.domain_modules = [Orders, Payments]
-
-  # Optional: additional classes for YAML serialization
-  c.extra_serialization_classes = [ActiveSupport::TimeWithZone, Money]
-end
-```
 
 ---
 
@@ -446,7 +531,8 @@ Generates:
 After generating, add your module to `config/initializers/tcb.rb`. This is the only place TCB needs to know about your domain modules. All reactions, persistence rules, and handler mappings are declared inside the module itself, not here:
 
 ```ruby
-c.domain_modules = [
+# config/initializers/tcb.rb
+TCB.domain_modules = [
   Orders,
   Notifications,
 ]
@@ -484,61 +570,24 @@ bus.force_shutdown
 
 ## Testing
 
-Use `TCB::EventStore::InMemory` in tests. TCB is designed so that `TCB.reset!` fully tears down and rebuilds the configuration between tests. It shuts down the event bus, clears the event store, and re-registers all handlers.
+### Setup
 
-The `TCB.configure` block is stored and replayed on every `reset!`. Each test gets a fresh event bus and a clean event store automatically.
+Configure TCB once at boot in `config/environments/test.rb` (see Configuration above). Between tests, call `TCB.reset!` to get a fresh event bus and a clean event store.
 
-### Rails initializer
+`TCB.reset!` shuts down the current bus, clears the event store, and clears all subscriptions. The next test starts with a clean slate. Domain modules do not need to be re-declared — they are set once at the top level and persist across resets.
+
+### Synchronous mode
+
+With `sync: true`, handlers execute in the caller thread immediately after `publish`. No background thread, no polling, no timing concerns. Tests are faster and deterministic. This is the recommended approach.
 
 ```ruby
-# config/initializers/tcb.rb
-Rails.application.config.to_prepare do
+# config/environments/test.rb
+Rails.application.config.after_initialize do
   TCB.configure do |c|
-    c.event_bus   = TCB::EventBus.new(
-      handle_signals: true,
-      shutdown_timeout: 10.0
-    )
-    c.event_store = Rails.env.test? ? TCB::EventStore::InMemory.new
-                                    : TCB::EventStore::ActiveRecord.new
-    c.domain_modules = [Orders, Notifications]
+    c.event_bus   = TCB::EventBus.new(sync: true)
+    c.event_store = TCB::EventStore::InMemory.new
   end
 end
-```
-
-### RSpec
-
-```ruby
-# spec/support/tcb.rb
-RSpec.configure do |config|
-  config.include TCB::RSpecHelpers
-
-  config.after(:each) do
-    TCB.reset!
-  end
-end
-```
-
-Require it from `rails_helper.rb`:
-
-```ruby
-require "support/tcb"
-```
-
-`TCB.reset!` replays the configure block. `Rails.env.test?` is re-evaluated each time, so `InMemory` gets a fresh instance on every reset.
-
-#### have_published
-
-```ruby
-expect { Orders.place!(order_id: 42, customer: "Alice") }.to have_published(Orders::OrderPlaced)
-expect { Orders.place!(...) }.to have_published(Orders::OrderPlaced.new(order_id: 42, customer: "Alice"))
-expect { Orders.place!(...) }.to have_published(Orders::OrderPlaced, within: 0.5)
-```
-
-#### poll_match
-
-```ruby
-expect { CALLED.include?(:reserve_inventory) }.to poll_match
-expect { Payment.completed? }.to poll_match(within: 2.0)
 ```
 
 ### Minitest
@@ -546,9 +595,12 @@ expect { Payment.completed? }.to poll_match(within: 2.0)
 ```ruby
 class OrdersTest < Minitest::Test
   include TCB::MinitestHelpers
+  def teardown = TCB.reset!
 
-  def teardown
-    TCB.reset!
+  def test_placing_order_publishes_event
+    assert_published(Orders::OrderPlaced) do
+      Orders.place!(order_id: 42, customer: "Alice")
+    end
   end
 end
 ```
@@ -564,9 +616,43 @@ assert_published(Orders::OrderPlaced, within: 0.5) { Orders.place!(...) }
 
 #### poll_assert
 
+Only needed when using an async bus. With `TCB::EventBus.new(sync: true)`, handlers execute in the caller thread and results are available immediately — no polling required.
+
 ```ruby
-poll_assert("handler was called") { CALLED.include?(:reserve_inventory) }
+poll_assert("reserve inventory called") { CALLED.include?(:reserve_inventory) }
 poll_assert("payment processed", within: 2.0) { Payment.completed? }
+```
+
+### RSpec
+
+```ruby
+# spec/support/tcb.rb
+RSpec.configure do |config|
+  config.after(:each) { TCB.reset! }
+end
+```
+
+Require it from `rails_helper.rb`:
+
+```ruby
+require "support/tcb"
+```
+
+#### have_published
+
+```ruby
+expect { Orders.place!(order_id: 42, customer: "Alice") }.to have_published(Orders::OrderPlaced)
+expect { Orders.place!(...) }.to have_published(Orders::OrderPlaced.new(order_id: 42, customer: "Alice"))
+expect { Orders.place!(...) }.to have_published(Orders::OrderPlaced, within: 0.5)
+```
+
+#### poll_match
+
+Only needed with an async bus.
+
+```ruby
+expect { CALLED.include?(:reserve_inventory) }.to poll_match
+expect { Payment.completed? }.to poll_match(within: 2.0)
 ```
 
 ---
