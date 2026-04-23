@@ -7,14 +7,13 @@ module TCB
     include TCB::MinitestHelpers
 
     def setup
-      config = TCB::Configuration.new
-      config.event_bus = TCB::EventBus.new
-      TCB.instance_variable_set(:@config, config)
+      TCB.configure_infrastructure do |c|
+        c.event_bus = TCB::EventBus.new
+      end
     end
 
     def teardown
-      TCB.config.event_bus.force_shutdown
-      TCB.instance_variable_set(:@config, nil)
+      TCB.reset!
     end
 
     # class argument

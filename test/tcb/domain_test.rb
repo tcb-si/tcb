@@ -44,15 +44,15 @@ module TCB
 
     def setup
       CALLED.clear
-      TCB.configure do |c|
-        c.event_bus      = TCB::EventBus.new
-        c.domain_modules = [Orders]
+
+      TCB.domain_modules = [Orders]
+      TCB.configure_infrastructure do |c|
+        c.event_bus = TCB::EventBus.new
       end
     end
 
     def teardown
-      TCB.config.event_bus.force_shutdown
-      TCB.instance_variable_set(:@config, nil)
+      TCB.reset!
     end
 
     def test_dispatch_triggers_event_handler_via_domain_module

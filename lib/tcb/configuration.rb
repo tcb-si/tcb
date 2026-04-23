@@ -97,12 +97,13 @@ module TCB
       @persist_registrations = []
       @domain_modules.each do |domain_module|
         next unless domain_module.respond_to?(:persist_registrations)
+        next unless domain_module.persist_registrations.any?
 
         context = DomainContext.from_module(domain_module).to_s
         domain_module.persist_registrations.each do |registration|
           @persist_registrations << registration.with(context: context)
         end
-        define_event_record_for(domain_module) if domain_module.persist_registrations.any?
+        define_event_record_for(domain_module)
       end
     end
 

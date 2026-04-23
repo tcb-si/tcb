@@ -26,6 +26,22 @@ require_relative "tcb/version"
 module TCB
   Envelope = EventStore::EventStreamEnvelope
 
+  def self.domain_modules=(modules)
+    @domain_modules = modules
+  end
+
+  def self.domain_modules
+    @domain_modules || []
+  end
+
+  def self.configure_infrastructure(&block)
+    @configure_block = block
+    yield config
+    config.domain_modules = @domain_modules || []
+    config.permitted_serialization_classes
+    config.freeze
+  end
+
   def self.record(events_from: [], events: [], within: nil, &block)
     Record.call(
       events_from: events_from,
@@ -52,13 +68,6 @@ module TCB
     !!@config && @config.event_bus_configured?
   end
 
-  def self.configure(&block)
-    @configure_block = block
-    yield config
-    config.permitted_serialization_classes
-    config.freeze
-  end
-
   def self.reset!(graceful_shutdown_time: nil)
     if configured?
       graceful_shutdown_time ?
@@ -66,6 +75,6 @@ module TCB
         @config.event_bus.force_shutdown
     end
     @config = nil
-    @configure_block = nil  # ← ne replay-a več
+    @configure_block = nil
   end
 end

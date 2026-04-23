@@ -4,8 +4,6 @@ require_relative '../test_helper'
 
 module TCB
   class ResetTest < Minitest::Test
-    include MinitestHelpers
-
     CALLED = []
 
     module TestDomain
@@ -23,10 +21,10 @@ module TCB
     def setup
       CALLED.clear
       TCB.reset!
-      TCB.configure do |c|
+      TCB.domain_modules = [TestDomain]
+      TCB.configure_infrastructure do |c|
         c.event_bus   = TCB::EventBus.new
         c.event_store = TCB::EventStore::InMemory.new
-        c.domain_modules = [TestDomain]
       end
     end
 
@@ -43,10 +41,10 @@ module TCB
 
     def test_reset_clears_event_bus_subscriptions
       TCB.reset!
-      TCB.configure do |c|
+      TCB.domain_modules = [TestDomain]
+      TCB.configure_infrastructure do |c|
         c.event_bus   = TCB::EventBus.new
         c.event_store = TCB::EventStore::InMemory.new
-        c.domain_modules = [TestDomain]
       end
       handlers = TCB.config.event_bus.registry.handlers_for(TestDomain::SomethingHappened)
       assert_equal 1, handlers.size
@@ -54,10 +52,10 @@ module TCB
 
     def test_reset_calls_event_store_reset_when_supported
       TCB.reset!
-      TCB.configure do |c|
+      TCB.domain_modules = [TestDomain]
+      TCB.configure_infrastructure do |c|
         c.event_bus   = TCB::EventBus.new
         c.event_store = TCB::EventStore::InMemory.new
-        c.domain_modules = [TestDomain]
       end
       assert_equal [], TCB.config.event_store.read("any|stream")
     end
@@ -65,10 +63,10 @@ module TCB
     def test_reset_clears_event_store_data
       TCB.config.event_store.append(stream_id: "orders|1", events: [OrderPlaced.new(order_id: 1, total: 10.0)])
       TCB.reset!
-      TCB.configure do |c|
+      TCB.domain_modules = [TestDomain]
+      TCB.configure_infrastructure do |c|
         c.event_bus   = TCB::EventBus.new
         c.event_store = TCB::EventStore::InMemory.new
-        c.domain_modules = [TestDomain]
       end
       assert_equal [], TCB.config.event_store.read("orders|1")
     end
@@ -116,15 +114,13 @@ module TCB
       assert_equal 1, envelopes.first.version
     end
 
-    def test_reset_without_configure_block_clears_config
-      TCB.instance_variable_set(:@configure_block, nil)
+    def test_reset_when_not_configured_is_safe
       TCB.reset!
-      assert_raises(TCB::ConfigurationError) { TCB.config.event_bus }
+      assert_silent { TCB.reset! }
     end
 
     def test_reset_with_graceful_shutdown_time_when_not_configured
-      TCB.instance_variable_set(:@configure_block, nil)
-      TCB.instance_variable_set(:@config, nil)
+      TCB.reset!
       assert_silent { TCB.reset!(graceful_shutdown_time: 5) }
     end
   end

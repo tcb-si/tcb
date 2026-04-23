@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require_relative '../../test_helper'
-require_relative '../../support/active_record_setup'
 
 module TCB
   class EventStore::ActiveRecordTest < Minitest::Test
@@ -17,20 +16,27 @@ module TCB
     end
 
     def setup
-      TCB.instance_variable_set(:@config, nil)
-      TCB.configure do |c|
-        c.event_bus   = TCB::EventBus.new
-        c.event_store = TCB::EventStore::ActiveRecord.new
-        c.domain_modules = [Orders]
+      ActiveRecord::Schema.define do
+        create_table :orders_events, force: :cascade do |t|
+          t.string   :event_id,    null: false
+          t.string   :stream_id,   null: false
+          t.integer  :version,     null: false
+          t.string   :event_type,  null: false
+          t.text     :payload,     null: false
+          t.datetime :occurred_at, null: false
+        end
+        add_index :orders_events, [:stream_id, :version], unique: true, if_not_exists: true
       end
 
-      # Clean slate between tests
-      ::Orders::EventRecord.delete_all
+      TCB.domain_modules = [Orders]
+      TCB.configure_infrastructure do |c|
+        c.event_bus   = TCB::EventBus.new(sync: true)
+        c.event_store = TCB::EventStore::ActiveRecord.new
+      end
     end
 
     def teardown
-      TCB.config.event_bus.force_shutdown
-      TCB.instance_variable_set(:@config, nil)
+      TCB.reset!
     end
 
     # append

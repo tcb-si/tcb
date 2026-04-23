@@ -1,4 +1,5 @@
 require_relative '../test_helper'
+require_relative '../support/active_record_setup'
 
 module TCB
   class EventStorePersistenceTest < Minitest::Test
@@ -34,17 +35,15 @@ module TCB
     end
 
     def setup
-      TCB.instance_variable_set(:@config, nil)
-      TCB.configure do |c|
-        c.event_bus      = TCB::EventBus.new
+      TCB.domain_modules = [TestOrders, TestPayments]
+      TCB.configure_infrastructure do |c|
+        c.event_bus      = TCB::EventBus.new(sync: true)
         c.event_store    = TCB::EventStore::InMemory.new
-        c.domain_modules = [TestOrders, TestPayments]
       end
     end
 
     def teardown
-      TCB.config.event_bus.force_shutdown
-      TCB.instance_variable_set(:@config, nil)
+      TCB.reset!
     end
 
     # Osnovni persistence
@@ -116,7 +115,6 @@ module TCB
       events = TCB.record(events_from: [order]) { order.place(total: 100.0) }
       TCB.publish(*events)
 
-      poll_assert("handler called") { persisted_before_publish }
       assert persisted_before_publish
     end
 

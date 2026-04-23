@@ -44,32 +44,30 @@ module TCB
 
     def setup
       CALLED.clear
-      TCB.instance_variable_set(:@config, nil)
-      TCB.configure do |c|
-        c.event_bus = TCB::EventBus.new
-        c.domain_modules = [TestOrders]
+      TCB.domain_modules = [TestOrders]
+      TCB.configure_infrastructure do |c|
+        c.event_bus = TCB::EventBus.new(sync: true)
       end
     end
 
     def teardown
-      TCB.config.event_bus.force_shutdown
-      TCB.instance_variable_set(:@config, nil)
+      TCB.reset!
     end
 
     def test_handler_called_when_event_published
       TCB.publish(TestOrders::OrderPlaced.new(order_id: 1))
-      poll_assert("reserve inventory was called") { CALLED.include?(:reserve_inventory) }
+      assert_includes CALLED, :reserve_inventory
     end
+
 
     def test_multiple_handlers_called_for_same_event
       TCB.publish(TestOrders::OrderPlaced.new(order_id: 1))
-      poll_assert("all handlers called") { CALLED.size == 2 }
       assert_equal [:reserve_inventory, :charge_payment], CALLED
     end
 
     def test_correct_handlers_called_for_each_event_type
       TCB.publish(TestOrders::OrderCancelled.new(order_id: 1, reason: "changed mind"))
-      poll_assert("refund payment was called") { CALLED.include?(:refund_payment) }
+      assert_includes CALLED, :refund_payment
       refute_includes CALLED, :reserve_inventory
       refute_includes CALLED, :charge_payment
     end
@@ -84,15 +82,12 @@ module TCB
     end
 
     def test_failing_handler_does_not_prevent_other_handlers
-      # subscribe na SubscriberInvocationFailed za observability
       failures = []
       TCB.config.event_bus.subscribe(TCB::SubscriberInvocationFailed) { |e| failures << e }
 
       TCB.publish(TestOrders::FailureAnticipated.new(order_id: 1))
 
-      poll_assert("reserve inventory called despite failure") { CALLED.include?(:reserve_inventory) }
-      poll_assert("failure event published") { failures.any? }
-
+      assert_includes CALLED, :reserve_inventory
       assert_equal 1, failures.size
       assert_equal "StandardError", failures.first.error_class
       assert_equal TestOrders::FailureAnticipated, failures.first.original_event.class
