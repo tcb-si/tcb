@@ -61,12 +61,16 @@ module TCB
       end
 
       def force_terminate
+        return unless @event_bus.dispatcher
+
         @event_bus.queue << :shutdown_sentinel
         @event_bus.dispatcher.kill if @event_bus.dispatcher.alive?
         @event_bus.dispatcher.join(0.1)
       end
 
       def terminate_dispatcher
+        return unless @event_bus.dispatcher
+
         @event_bus.queue << :shutdown_sentinel
         @event_bus.dispatcher.join(0.5)
       end

@@ -10,8 +10,8 @@ module TCB
   class EventBus
     class ShutdownError < StandardError; end
 
-    attr_reader :queue, :registry, :mutex, :active_dispatches, :dispatcher,
-      :events_processed_during_shutdown, :max_queue_size
+    attr_reader :queue, :registry, :mutex, :active_dispatches, :events_processed_during_shutdown, :max_queue_size
+    attr_accessor :dispatcher
 
     def initialize(
       handle_signals: false,
@@ -31,28 +31,8 @@ module TCB
       @active_dispatches = 0
       @events_processed_during_shutdown = 0
       @execution_strategy = RunningStrategy.new(self, sync: @sync)
-
-      unless @sync
-        @dispatcher = Thread.new do
-          loop do
-            event = @queue.pop
-            break if event == :shutdown_sentinel
-
-            dispatch(event)
-            dispatch(build_pressure_event) if high_water_mark_reached?
-          end
-        end
-      end
-
-      if handle_signals
-        @termination_signal_handler = TerminationSignalHandler.new(
-          event_bus: self,
-          shutdown_timeout: shutdown_timeout,
-          signals: shutdown_signals,
-          on_signal: on_signal
-        )
-        @termination_signal_handler.install
-      end
+      @execution_strategy.start
+      install_signal_handlers(shutdown_timeout:, shutdown_signals:, on_signal:) if handle_signals
     end
 
     # Subscribe to a specific event class
@@ -126,13 +106,14 @@ module TCB
       end
     end
 
-    def build_pressure_event
-      EventBusQueuePressure.new(
-        queue_size: @queue.size,
-        max_queue_size: @max_queue_size,
-        occupancy: @queue.size.to_f / @max_queue_size,
-        occurred_at: Time.now
+    def install_signal_handlers(shutdown_timeout:, shutdown_signals:, on_signal:)
+      @termination_signal_handler = TerminationSignalHandler.new(
+        event_bus: self,
+        shutdown_timeout: shutdown_timeout,
+        signals: shutdown_signals,
+        on_signal: on_signal
       )
+      @termination_signal_handler.install
     end
   end
 end

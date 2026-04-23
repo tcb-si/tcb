@@ -9,10 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `TCB::EventBus.new(sync: false)` — opt-in synchronous execution mode; handlers execute in caller thread, no dispatcher thread started, no polling required in tests
 - `TCB::EventBus.new(max_queue_size:, high_water_mark:)` — opt-in queue pressure signalling; emits `TCB::EventBusQueuePressure` event once per threshold crossing when queue depth reaches or exceeds `high_water_mark`
 - `TCB::EventBus.new(max_queue_size:)` — opt-in bounded queue via `SizedQueue`; publish blocks caller thread when queue is full, providing explicit backpressure signal
 - `TCB.configured?` — predicate to check if TCB has been configured
 - `TCB.reset!(graceful_shutdown_time:)` — optional graceful bus drain before reset; defaults to `force_shutdown`
+- `EventBus#initialize` — dispatcher thread setup extracted to `RunningStrategy#start`; signal handler setup extracted to private `install_signal_handlers`
+- `RunningStrategy` — accepts `sync:` keyword; `start` method owns dispatcher thread lifecycle; `build_pressure_event` moved from `EventBus` into `RunningStrategy`
+- `ShutdownStrategy` — `force_terminate` and `terminate_dispatcher` are no-op when dispatcher is nil (sync mode)
 
 ### Changed
 
