@@ -86,40 +86,75 @@ When the queue is full, `publish` blocks until space is available. The right val
 Instead of block handlers, reactions can be declared as classes inside a module. This keeps handlers close to the domain and readable at a glance.
 
 ```ruby
+# app/domain/warehouse.rb
+module Warehouse
+  include TCB::Domain
+
+  StockReserved = Data.define(:order_id)
+
+  persist events(
+    StockReserved,
+    stream_id_from_event: :order_id
+  )
+
+  on Sales::OrderPlaced, react_with(ReserveStock)
+end
+
+# app/domain/warehouse/reserve_stock.rb
+module Warehouse
+  class ReserveStock
+    def call(event)
+      stock = Stock.new(id: event.order_id)
+
+      events = TCB.record(events_from: [stock], within: ApplicationRecord) do
+        stock.reserve
+      end
+
+      TCB.publish(*events)
+    end
+  end
+end
+```
+
+```ruby
+# app/domain/notifications.rb
 module Notifications
   include TCB::HandlesEvents
 
-  on Auth::UserRegistered, react_with(SendWelcomeEmail, TrackRegistration)
-  on Orders::OrderPlaced,  react_with(SendOrderConfirmation)
+  on Warehouse::StockReserved, react_with(NotifyCustomer)
 end
 
-class SendWelcomeEmail
-  def call(event)
-    WelcomeMailer.deliver(event.email)
+# app/domain/notifications/notify_customer.rb
+module Notifications
+  class NotifyCustomer
+    def call(event)
+      events = TCB.record(events: [CustomerNotified.new(order_id: event.order_id)])
+      TCB.publish(*events)
+    end
   end
-end
 
-class TrackRegistration
-  def call(event)
-    Analytics.track("user_registered", user_id: event.id)
-  end
+  CustomerNotified = Data.define(:order_id)
 end
 ```
 
-Event classes can come from anywhere. `TCB::HandlesEvents` only cares that they are published on the bus. Cross-module reactions are the norm, not the exception.
+Event classes can come from anywhere. Cross-module reactions are the norm, not the exception. Each handler is isolated. Ine failure does not prevent others from executing.
 
-Register at configuration time:
+Domain modules are declared once at the top level, before infrastructure is configured.
+This is the only place TCB needs to know about your bounded contexts — all reactions,
+persistence rules, and handler mappings live inside each module itself.
 
 ```ruby
-TCB.domain_modules = [ Notifications ]
-TCB.configure do |c|
-  c.event_bus = TCB::EventBus.new
-end
+TCB.domain_modules = [Sales, Warehouse, Notifications]
 
-TCB.publish(Auth::UserRegistered.new(id: 1, email: "alice@example.com"))
+TCB.configure do |c|
+  c.event_bus   = TCB::EventBus.new
+  c.event_store = TCB::EventStore::ActiveRecord.new
+end
 ```
 
-Each handler is isolated. One failure does not prevent others from executing.
+`TCB.domain_modules=` wires up subscriptions and command routing from all modules.
+`TCB.configure` provides the infrastructure they run on. The two are intentionally
+separate — domain modules don't change between environments, infrastructure does.
 
 ---
 
@@ -173,12 +208,16 @@ Keep domain code together. TCB convention is a single `app/domain` folder. Beyon
 
 ```
 app/domain/
-  orders.rb               # domain module, public interface
-  orders/
-    order.rb              # aggregate
+  sales.rb                      # domain module, public interface
+  sales/
+    order.rb                    # aggregate
     place_order_handler.rb
-    reserve_inventory.rb
-    charge_payment.rb
+  warehouse.rb
+  warehouse/
+    reserve_stock.rb
+  notifications.rb
+  notifications/
+    notify_customer.rb
 ```
 
 ### The domain module
@@ -186,8 +225,8 @@ app/domain/
 The domain module is a boundary. Everything inside speaks the domain language. Nothing leaks out, nothing bleeds in. Keep everything that belongs together, together. Events, commands, persistence rules, and reactions are all declared in one place:
 
 ```ruby
-# app/domain/orders.rb
-module Orders
+# app/domain/sales.rb
+module Sales
   include TCB::Domain
 
   # Facade
@@ -195,41 +234,27 @@ module Orders
     TCB.dispatch(PlaceOrder.new(order_id: order_id, customer: customer))
   end
 
-  def self.cancel!(order_id:, reason:)
-    TCB.dispatch(CancelOrder.new(order_id: order_id, reason: reason))
-  end
-
   # Events
-  OrderPlaced    = Data.define(:order_id, :customer)
-  OrderCancelled = Data.define(:order_id, :reason)
+  OrderPlaced = Data.define(:order_id, :customer)
 
   # Commands
-  PlaceOrder  = Data.define(:order_id, :customer) do
+  PlaceOrder = Data.define(:order_id, :customer) do
     def validate!
       raise ArgumentError, "customer required" if customer.nil?
-    end
-  end
-
-  CancelOrder = Data.define(:order_id, :reason) do
-    def validate!
-      raise ArgumentError, "reason required" if reason.nil?
     end
   end
 
   # Persistence
   persist events(
     OrderPlaced,
-    OrderCancelled,
     stream_id_from_event: :order_id
   )
 
   # Commands
-  handle PlaceOrder,  with(PlaceOrderHandler)
-  handle CancelOrder, with(CancelOrderHandler)
+  handle PlaceOrder, with(PlaceOrderHandler)
 
   # Reactions
-  on OrderPlaced,    react_with(ReserveInventory, ChargePayment)
-  on OrderCancelled, react_with(RefundPayment)
+  on OrderPlaced, react_with(Warehouse::ReserveStock)
 end
 ```
 
@@ -238,8 +263,7 @@ end
 The facade is the public contract. Callers get plain method calls with meaningful names. TCB stays out of sight:
 
 ```ruby
-Orders.place!(order_id: 42, customer: "Alice")
-Orders.cancel!(order_id: 42, reason: "changed mind")
+Sales.place!(order_id: 42, customer: "Alice")
 ```
 
 Facade methods use the bang convention. `TCB.dispatch` calls `validate!` on the command before routing it to the handler and raises if validation fails. Naming facade methods with `!` signals to callers that exceptions are expected.
@@ -251,8 +275,8 @@ An aggregate is the consistency boundary around your domain state. It decides wh
 The `TCB.record` block is the transactional boundary. Pass one aggregate or many. Either everything is persisted as it should be, or nothing is. The domain stays in a valid state.
 
 ```ruby
-# app/domain/orders/order.rb
-module Orders
+# app/domain/sales/order.rb
+module Sales
   class Order
     include TCB::RecordsEvents
 
@@ -263,10 +287,6 @@ module Orders
     def place(customer:)
       record OrderPlaced.new(order_id: id, customer: customer)
     end
-
-    def cancel(reason:)
-      record OrderCancelled.new(order_id: id, reason: reason)
-    end
   end
 end
 ```
@@ -275,17 +295,13 @@ end
 
 The command handler is the entry point into the domain. This is where you ensure the domain stays in a valid state before announcing anything to the rest of the system. Persist first, publish after.
 
-#### With aggregate
-
 ```ruby
-# app/domain/orders/place_order_handler.rb
-module Orders
+# app/domain/sales/place_order_handler.rb
+module Sales
   class PlaceOrderHandler
     def call(command)
       order = Order.new(id: command.order_id)
 
-      # within: ApplicationRecord wraps the block in a database transaction.
-      # If anything raises, no events are persisted and none are published.
       events = TCB.record(events_from: [order], within: ApplicationRecord) do
         order.place(customer: command.customer)
       end
@@ -454,12 +470,43 @@ end
 Each result is a `TCB::Envelope`:
 
 ```ruby
-envelope.event        # the domain event
-envelope.event_id     # UUID string
-envelope.stream_id    # "context|aggregate_id"
-envelope.version      # integer, sequential per stream
-envelope.occurred_at  # Time
+envelope.event          # the domain event
+envelope.event_id       # UUID string
+envelope.stream_id      # "context|aggregate_id"
+envelope.version        # integer, sequential per stream
+envelope.occurred_at    # Time
+envelope.correlation_id # UUID string, shared across all events in a dispatch chain
+envelope.causation_id   # UUID string, event_id of the triggering event; nil for the first event
 ```
+
+---
+
+## Correlation and causation tracking
+
+Every `TCB.dispatch` generates a `correlation_id` and returns it to the caller. All events produced within that dispatch chain share the same `correlation_id`, regardless of how deep the reactive chain goes. `causation_id` identifies the direct cause — the `event_id` of the envelope that triggered the handler.
+
+```
+Sales.place!(order_id: 42, customer: "Alice")
+  └─ Sales::OrderPlaced            correlation_id: "req-abc", causation_id: nil
+      └─ Warehouse::StockReserved      correlation_id: "req-abc", causation_id: OrderPlaced.event_id
+          └─ Notifications::CustomerNotified  correlation_id: "req-abc", causation_id: StockReserved.event_id
+```
+
+`correlation_id` can be provided externally. That's useful for tying a dispatch to an incoming HTTP request:
+
+```ruby
+correlation_id = TCB.dispatch(
+  Sales::PlaceOrder.new(order_id: 42, customer: "Alice"),
+  correlation_id: request.uuid
+)
+response.set_header("X-Correlation-ID", correlation_id)
+```
+
+`correlation_id` and `causation_id` are set by `TCB.record`, not by `TCB.publish`. A handler that calls `TCB.record` within a reactive chain will always have both fields populated. A handler that only calls `TCB.publish` without `TCB.record` produces envelopes without these fields. There is no event store context to propagate from.
+
+Handler interfaces are unchanged. `def call(event)` receives the domain event as always. Correlation and causation travel in the envelope, not in your domain code.
+
+Events recorded outside a dispatch context (directly via `TCB.record` without a preceding `TCB.dispatch`) have `nil` for both fields. This is expected: there is no dispatch to correlate them to.
 
 ---
 
@@ -528,13 +575,14 @@ Generates:
 | `--skip-migration` | Skip migration (event_store only) |
 | `--no-comments` | Generate without inline guidance comments |
 
-After generating, add your module to `config/initializers/tcb.rb`. This is the only place TCB needs to know about your domain modules. All reactions, persistence rules, and handler mappings are declared inside the module itself, not here:
+After generating, add your module to config/initializers/tcb.rb. Domain modules don't change between environments — infrastructure does. Keeping them separate means your bounded contexts are declared once, while the bus and store are configured per environment:
 
 ```ruby
 # config/initializers/tcb.rb
 TCB.domain_modules = [
-  Orders,
-  Notifications,
+  Sales,
+  Warehouse,
+  Notifications
 ]
 ```
 

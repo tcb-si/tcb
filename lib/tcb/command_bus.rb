@@ -7,6 +7,7 @@ module TCB
     handler = resolve_handler(command)
     Thread.current[:tcb_correlation_id] = correlation_id
     handler.new.call(command)
+    correlation_id
   ensure
     Thread.current[:tcb_correlation_id] = nil
   end

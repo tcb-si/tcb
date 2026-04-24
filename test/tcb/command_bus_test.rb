@@ -2,6 +2,8 @@ require_relative '../test_helper'
 
 module TCB
   class CommandBusTest < Minitest::Test
+    include TCB::MinitestHelpers
+
     OrderPlaced = Data.define(:order_id, :customer)
 
     class Order
@@ -59,14 +61,20 @@ module TCB
       end
     end
 
-    def test_dispatch_calls_registered_handler
-      events = TCB.dispatch(PlaceOrder.new(order_id: 1, customer: "Alice")).map(&:event)
-      assert_includes events, OrderPlaced.new(order_id: 1, customer: "Alice")
+    def test_dispatch_returns_correlation_id
+      correlation_id = TCB.dispatch(PlaceOrder.new(order_id: 1, customer: "Alice"))
+      assert_kind_of String, correlation_id
+      refute_nil correlation_id
     end
 
-    def test_dispatch_returns_events_from_handler
-      events = TCB.dispatch(PlaceOrder.new(order_id: 1, customer: "Alice")).map(&:event)
-      assert_equal [OrderPlaced.new(order_id: 1, customer: "Alice")], events
+    def test_dispatch_calls_registered_handler
+      received = []
+      TCB.config.event_bus.subscribe(OrderPlaced) { |envelope| received << envelope.event }
+
+      TCB.dispatch(PlaceOrder.new(order_id: 1, customer: "Alice"))
+
+      poll_assert("handler called") { received.any? }
+      assert_includes received, OrderPlaced.new(order_id: 1, customer: "Alice")
     end
 
     def test_dispatch_raises_when_no_handler_registered
