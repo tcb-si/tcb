@@ -510,6 +510,29 @@ Events recorded outside a dispatch context (directly via `TCB.record` without a 
 
 ---
 
+## Reading a correlation chain
+
+To query all events across domains that share a `correlation_id`:
+
+```ruby
+# All domains with persistence
+TCB.read_correlation("req-abc").to_a
+
+# Specific domains
+TCB.read_correlation("req-abc", across: [Sales, Warehouse, Notifications]).to_a
+
+# With time filters
+TCB.read_correlation("req-abc").occurred_after(1.hour.ago).to_a
+TCB.read_correlation("req-abc").occurred_before(Time.now).to_a
+TCB.read_correlation("req-abc").between(1.hour.ago, Time.now).to_a
+```
+
+Results are ordered by `occurred_at` across all domains. Each result is a `TCB::Envelope` with `correlation_id` and `causation_id` populated.
+
+`across:` defaults to all configured domain modules that have persistence registrations. Domains without persistence — like `Notifications` in the example above — are excluded automatically.
+
+---
+
 ## Event Store Adapters
 
 ### In-Memory (for tests)

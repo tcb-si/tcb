@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `TCB.read_correlation(correlation_id, across: [...])` — cross-domain correlation query; returns all envelopes with the given `correlation_id` across specified domains, ordered by `occurred_at`; `across:` is optional, defaults to all domains with persistence registrations; supports `occurred_after`, `occurred_before`, `between` filters
+- `TCB::CorrelationQuery` — fluent interface for correlation queries with `occurred_after`, `occurred_before`, `between`, `to_a`
+- `TCB::EventStore::InMemory#read_by_correlation` — correlation query support for in-memory store
+- `TCB::EventStore::ActiveRecord#read_by_correlation` — correlation query support via SQL UNION across domain tables
 - `TCB::Envelope` — unified primitive replacing `TCB::EventStore::EventStreamEnvelope`; carries `event`, `event_id`, `stream_id`, `version`, `occurred_at`, `correlation_id`, `causation_id`
 - `TCB::Envelope.wrap(event, correlation_id:, causation_id:)` — factory for wrapping bare events into envelopes with auto-generated `event_id` and `occurred_at`
 - `TCB::Envelope.coerce(event_or_envelope)` — idempotent coercion; returns envelope unchanged, wraps bare events

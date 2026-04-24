@@ -37,6 +37,14 @@ module TCB
           .then { |e| limit          ? e.first(limit)                                      : e }
       end
 
+      def read_by_correlation(correlation_id, context:, occurred_after: nil, occurred_before: nil)
+        @mutex.synchronize { @streams.values.flatten.dup }
+          .select { |e| e.stream_id.start_with?(context) }
+          .select { |e| e.correlation_id == correlation_id }
+          .then { |e| occurred_after  ? e.select { |env| env.occurred_at > occurred_after }  : e }
+          .then { |e| occurred_before ? e.select { |env| env.occurred_at < occurred_before } : e }
+      end
+
       def reset!
         @mutex.synchronize do
           @streams = Hash.new { |h, k| h[k] = [] }

@@ -3,6 +3,7 @@
 require_relative "tcb/envelope"
 require_relative "tcb/minitest_helpers"
 require_relative "tcb/domain_context"
+require_relative "tcb/correlation_query"
 require_relative "tcb/event_query"
 require_relative "tcb/event_store/active_record"
 require_relative "tcb/event_store/in_memory"
@@ -55,6 +56,18 @@ module TCB
     EventQuery.new(
       store: config.event_store,
       context: DomainContext.from_module(domain_module).to_s
+    )
+  end
+
+  def self.read_correlation(correlation_id, across: nil)
+    domains = across || config.domain_modules.select do |m|
+      m.respond_to?(:persist_registrations) && m.persist_registrations.any?
+    end
+
+    CorrelationQuery.new(
+      store:          config.event_store,
+      correlation_id: correlation_id,
+      domains:        domains
     )
   end
 
