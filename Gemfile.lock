@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    tcb (0.5.0)
+    tcb (0.6.0)
       method_source (~> 1.0)
 
 GEM
