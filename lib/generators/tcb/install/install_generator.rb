@@ -3,7 +3,7 @@
 module TCB
   module Generators
     class InstallGenerator < Rails::Generators::Base
-      namespace "TCB:install"
+      namespace "tcb:install"
       source_root File.expand_path("templates", __dir__)
 
       desc "Creates a TCB initializer in config/initializers"

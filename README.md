@@ -550,7 +550,7 @@ TCB::EventStore::ActiveRecord.new
 Generate migration and AR model:
 
 ```
-bin/rails generate TCB:event_store orders
+bin/rails generate tcb:event_store orders
 ```
 
 ---
@@ -562,7 +562,7 @@ TCB includes generators to scaffold domain modules, command handlers, and migrat
 ### Install
 
 ```bash
-rails generate TCB:install
+rails generate tcb:install
 ```
 
 Creates `config/initializers/tcb.rb` with a minimal configuration template.
@@ -570,7 +570,7 @@ Creates `config/initializers/tcb.rb` with a minimal configuration template.
 ### Domain module with event store
 
 ```bash
-rails generate TCB:event_store orders place_order:order_id,customer cancel_order:order_id,reason
+rails generate tcb:event_store orders place_order:order_id,customer cancel_order:order_id,reason
 ```
 
 Generates:
@@ -582,7 +582,7 @@ Generates:
 ### Domain module without persistence (pub/sub only)
 
 ```bash
-rails generate TCB:domain notifications send_welcome_email:user_id,email send_verification_sms:user_id,phone
+rails generate tcb:domain notifications send_welcome_email:user_id,email send_verification_sms:user_id,phone
 ```
 
 Generates:
