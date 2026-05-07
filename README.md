@@ -46,11 +46,11 @@ bus.publish(UserRegistered.new(id: 1, email: "alice@example.com"))
 
 ### Execution model
 
-TCB::EventBus uses a single background thread to process events. Publishing is non-blocking — the event is placed on a queue and control returns to the caller immediately. The dispatcher thread processes events in FIFO order. Handlers for a given event execute sequentially within the dispatcher thread.
+TCB::EventBus uses a single background thread to process events. Publishing is non-blocking. The event is placed on a queue and control returns to the caller immediately. The dispatcher thread processes events in FIFO order. Handlers for a given event execute sequentially within the dispatcher thread.
 
 This design favors determinism and simplicity: events are always processed in the order they were published, and handlers cannot race with each other.
 
-For tests and simple use cases, `sync: true` executes handlers in the caller thread immediately — no background thread, no queue:
+For tests and simple use cases, `sync: true` executes handlers in the caller thread immediately, no background thread, no queue:
 
 ```ruby
 bus = TCB::EventBus.new(sync: true)
@@ -77,7 +77,7 @@ The event queue is unbounded by default. If handlers are slower than the rate of
 TCB::EventBus.new(max_queue_size: 10_000)
 ```
 
-When the queue is full, `publish` blocks until space is available. The right value depends on your event volume and handler latency — measure before deciding.
+When the queue is full, `publish` blocks until space is available. The right value depends on your event volume and handler latency. Measure before deciding.
 
 ---
 
@@ -140,7 +140,7 @@ end
 Event classes can come from anywhere. Cross-module reactions are the norm, not the exception. Each handler is isolated. Ine failure does not prevent others from executing.
 
 Domain modules are declared once at the top level, before infrastructure is configured.
-This is the only place TCB needs to know about your bounded contexts — all reactions,
+This is the only place TCB needs to know about your bounded contexts. All reactions,
 persistence rules, and handler mappings live inside each module itself.
 
 ```ruby
@@ -154,7 +154,7 @@ end
 
 `TCB.domain_modules=` wires up subscriptions and command routing from all modules.
 `TCB.configure` provides the infrastructure they run on. The two are intentionally
-separate — domain modules don't change between environments, infrastructure does.
+separate. Domain modules don't change between environments, infrastructure does.
 
 ---
 
@@ -370,7 +370,7 @@ end
 
 ### Domain modules
 
-Domain modules are the bounded contexts of your application. Declare them once, at the top level — before infrastructure is configured:
+Domain modules are the bounded contexts of your application. Declare them once, at the top level, before infrastructure is configured:
 
 ```ruby
 # config/initializers/tcb.rb
@@ -425,7 +425,7 @@ Rails.application.config.after_initialize do
 end
 ```
 
-`sync: true` executes handlers in the caller thread — no background thread, no polling. `after_initialize` runs once at boot. Between tests, call `TCB.reset!` to get a fresh bus and store.
+`sync: true` executes handlers in the caller thread. No background thread, no polling. `after_initialize` runs once at boot. Between tests, call `TCB.reset!` to get a fresh bus and store.
 
 Each domain module gets its own database table. Domains stay isolated at the persistence level:
 
@@ -483,7 +483,7 @@ envelope.causation_id   # UUID string, event_id of the triggering event; nil for
 
 ## Correlation and causation tracking
 
-Every `TCB.dispatch` generates a `correlation_id` and returns it to the caller. All events produced within that dispatch chain share the same `correlation_id`, regardless of how deep the reactive chain goes. `causation_id` identifies the direct cause — the `event_id` of the envelope that triggered the handler.
+Every `TCB.dispatch` generates a `correlation_id` and returns it to the caller. All events produced within that dispatch chain share the same `correlation_id`, regardless of how deep the reactive chain goes. `causation_id` identifies the direct cause, the `event_id` of the envelope that triggered the handler.
 
 ```
 Sales.place!(order_id: 42, customer: "Alice")
@@ -529,7 +529,7 @@ TCB.read_correlation("req-abc").between(1.hour.ago, Time.now).to_a
 
 Results are ordered by `occurred_at` across all domains. Each result is a `TCB::Envelope` with `correlation_id` and `causation_id` populated.
 
-`across:` defaults to all configured domain modules that have persistence registrations. Domains without persistence — like `Notifications` in the example above — are excluded automatically.
+`across:` defaults to all configured domain modules that have persistence registrations. Domains without persistence, like `Notifications` in the example above, are excluded automatically.
 
 ---
 
@@ -598,7 +598,7 @@ Generates:
 | `--skip-migration` | Skip migration (event_store only) |
 | `--no-comments` | Generate without inline guidance comments |
 
-After generating, add your module to config/initializers/tcb.rb. Domain modules don't change between environments — infrastructure does. Keeping them separate means your bounded contexts are declared once, while the bus and store are configured per environment:
+After generating, add your module to config/initializers/tcb.rb. Domain modules don't change between environments. Infrastructure does. Keeping them separate means your bounded contexts are declared once, while the bus and store are configured per environment:
 
 ```ruby
 # config/initializers/tcb.rb
@@ -645,7 +645,7 @@ bus.force_shutdown
 
 Configure TCB once at boot in `config/environments/test.rb` (see Configuration above). Between tests, call `TCB.reset!` to get a fresh event bus and a clean event store.
 
-`TCB.reset!` shuts down the current bus, clears the event store, and clears all subscriptions. The next test starts with a clean slate. Domain modules do not need to be re-declared — they are set once at the top level and persist across resets.
+`TCB.reset!` shuts down the current bus, clears the event store, and clears all subscriptions. The next test starts with a clean slate. Domain modules do not need to be re-declared. They are set once at the top level and persist across resets.
 
 ### Synchronous mode
 
@@ -661,12 +661,20 @@ Rails.application.config.after_initialize do
 end
 ```
 
+`after_initialize` runs once at boot. Tests do not reload Rails, so `to_prepare` is unnecessary. Between tests, TCB.reset! shuts down the current bus and clears the store, but also wipes the configuration. Restore it in your test teardown so every test starts with a clean, fully configured bus.
+
 ### Minitest
 
 ```ruby
 class OrdersTest < Minitest::Test
   include TCB::MinitestHelpers
-  def teardown = TCB.reset!
+  def teardown
+    TCB.reset!
+    TCB.configure do |c|
+      c.event_bus   = TCB::EventBus.new(sync: true)
+      c.event_store = TCB::EventStore::InMemory.new
+    end
+  end
 
   def test_placing_order_publishes_event
     assert_published(Orders::OrderPlaced) do
@@ -687,7 +695,7 @@ assert_published(Orders::OrderPlaced, within: 0.5) { Orders.place!(...) }
 
 #### poll_assert
 
-Only needed when using an async bus. With `TCB::EventBus.new(sync: true)`, handlers execute in the caller thread and results are available immediately — no polling required.
+Only needed when using an async bus. With `TCB::EventBus.new(sync: true)`, handlers execute in the caller thread and results are available immediately. No polling required.
 
 ```ruby
 poll_assert("reserve inventory called") { CALLED.include?(:reserve_inventory) }
@@ -699,7 +707,13 @@ poll_assert("payment processed", within: 2.0) { Payment.completed? }
 ```ruby
 # spec/support/tcb.rb
 RSpec.configure do |config|
-  config.after(:each) { TCB.reset! }
+  config.after(:each) do
+    TCB.reset!
+    TCB.configure do |c|
+      c.event_bus   = TCB::EventBus.new(sync: true)
+      c.event_store = TCB::EventStore::InMemory.new
+    end
+  end
 end
 ```
 
