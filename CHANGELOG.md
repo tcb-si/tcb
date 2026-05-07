@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `tcb:install` generator — `TCB.domain_modules=` moved into `Rails.application.config.to_prepare` block; bare initializer runs before Zeitwerk loads application constants, causing `NameError` when domain modules reference Rails classes such as `ApplicationJob` or `ApplicationRecord`
+
 ## [0.6.1] - 2026-05-06
 
 ### Fixed

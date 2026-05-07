@@ -2,19 +2,27 @@
 # Add your domain modules here after generating them:
 #   rails generate tcb:event_store orders place_order:order_id,customer
 #   rails generate tcb:domain notifications send_welcome_email:user_id,email
-TCB.domain_modules = [
-  # Orders,
-  # Notifications,
-]
+#
+# to_prepare runs after Zeitwerk loads all application constants.
+# Domain modules typically reference Rails classes (ApplicationJob, ApplicationRecord, etc.)
+# that are not yet available at initializer time.
+Rails.application.config.to_prepare do
+  TCB.domain_modules = [
+    # Orders,
+    # Notifications,
+  ]
+end
 
 # Infrastructure — how events are transported and stored
-# Runs on every Rails reload in development
-Rails.application.config.to_prepare do
-  TCB.configure do |c|
-    c.event_bus   = TCB::EventBus.new(
-      handle_signals: true,
-      shutdown_timeout: 10.0
-    )
-    c.event_store = TCB::EventStore::ActiveRecord.new
-  end
-end
+# Configure per environment in config/environments/*.rb so differences are explicit.
+# Example for development:
+#
+#   Rails.application.config.to_prepare do
+#     TCB.reset!
+#     TCB.configure do |c|
+#       c.event_bus   = TCB::EventBus.new(handle_signals: false, shutdown_timeout: 10.0)
+#       c.event_store = TCB::EventStore::ActiveRecord.new
+#     end
+#   end
+#
+# See README for production and test examples.

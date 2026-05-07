@@ -602,12 +602,16 @@ After generating, add your module to config/initializers/tcb.rb. Domain modules 
 
 ```ruby
 # config/initializers/tcb.rb
-TCB.domain_modules = [
-  Sales,
-  Warehouse,
-  Notifications
-]
+Rails.application.config.to_prepare do
+  TCB.domain_modules = [
+    Sales,
+    Warehouse,
+    Notifications
+  ]
+end
 ```
+
+`to_prepare` runs after Zeitwerk loads all application constants. Use it instead of a bare initializer. Domain modules typically reference Rails classes (ApplicationJob, ApplicationRecord, etc.) that are not yet available at initializer time.
 
 ---
 
