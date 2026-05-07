@@ -1,10 +1,36 @@
 # TCB
 
+Is your codebase using every form of coupling except the one architects actually recommend?
+How much does a feature request cost you now?
+
+TCB gives each concern its own place, a clean domain language, and a full record
+of everything that happened, so you can understand and evolve your business logic
+with confidence.
+
+Imagine the following scenario. An order is placed. Stock gets reserved. The customer is notified.
+Now imagine each piece in its own domain, reacting independently, easy to test in isolation,
+simple to evolve as your business grows, and the full picture always visible.
+
+```ruby
+PlaceOrder = Data.define(:order_id, :customer)
+def Sales.place!(order_id:, customer:) = TCB.dispatch(PlaceOrder.new(order_id:, customer:))
+
+correlation_id = Sales.place!(order_id: 42, customer: "Alice")
+#   Sales             → OrderPlaced        persisted, published
+#     Warehouse       → StockReserved      reacts automatically, same correlation
+#       Notifications → CustomerNotified   reacts automatically, same correlation
+
+TCB.read_correlation(correlation_id).to_a # => all three events, across all three domains, in order
+```
+
 A lightweight, thread-safe event and command runtime for Domain-Driven Design on Rails.
+Events, aggregates, and handlers are plain Ruby. No framework inheritance, no infrastructure
+details leaking into your domain.
 
-TCB gives Rails applications a clean domain language. Events, aggregates, and handlers are plain Ruby. No framework inheritance, no infrastructure details leaking into your domain.
-
-TCB uses a command and event bus as an architectural coordination mechanism. Commands are decisions routed to exactly one handler. Events are facts broadcast to any number of reactions. The goal is to isolate side-effects, allow independent evolution of behaviors, and support an increasing number of business-significant events.
+Rails can change. Your domains should change only when your business demands it.
+Clean domain code pays compound interest. It's easier to reason about, easier to test,
+and easier for AI agents to work with. TCB keeps your domain that way.
+Rails takes care of the rest.
 
 ## Installation
 
