@@ -37,6 +37,15 @@ module TCB
           .then { |e| limit          ? e.first(limit)                                      : e }
       end
 
+      def read_by_event_ids(event_ids)
+        @mutex.synchronize do
+          @streams.values
+            .flatten
+            .select { |envelope| event_ids.include?(envelope.event_id) }
+            .each_with_object({}) { |envelope, hash| hash[envelope.event_id] = envelope }
+        end
+      end
+
       def read_by_correlation(correlation_id, context:, occurred_after: nil, occurred_before: nil)
         @mutex.synchronize { @streams.values.flatten.dup }
           .select { |e| e.stream_id.start_with?(context) }

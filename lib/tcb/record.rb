@@ -2,26 +2,35 @@
 
 module TCB
   class Record
-    def self.call(events_from:, events:, within:, store:, registrations:, &block)
+    def self.call(
+      events_from:, events:, within:, store:, registrations:, outbox_registrations: [], outbox_store: nil, &block
+    )
       raise ArgumentError, "events_from: or events: must be provided" if events_from.empty? && events.empty?
 
       new(
-        events_from:    events_from,
-        events:         events,
-        store:          store,
-        registrations:  registrations,
-        correlation_id: Thread.current[:tcb_correlation_id],
-        causation_id:   Thread.current[:tcb_causation_id]
+        events_from:          events_from,
+        events:               events,
+        store:                store,
+        registrations:        registrations,
+        outbox_registrations: outbox_registrations,
+        outbox_store:         outbox_store,
+        correlation_id:       Thread.current[:tcb_correlation_id],
+        causation_id:         Thread.current[:tcb_causation_id]
       ).call(within: within, &block)
     end
 
-    def initialize(events_from:, events:, store:, registrations:, correlation_id: nil, causation_id: nil)
-      @events_from    = events_from
-      @events         = events
-      @store          = store
-      @registrations  = registrations
-      @correlation_id = correlation_id
-      @causation_id = causation_id
+    def initialize(
+      events_from:, events:, store:, registrations:, outbox_registrations: [], outbox_store: nil,
+      correlation_id: nil, causation_id: nil
+    )
+      @events_from          = events_from
+      @events               = events
+      @store                = store
+      @registrations        = registrations
+      @outbox_registrations = outbox_registrations
+      @outbox_store         = outbox_store
+      @correlation_id       = correlation_id
+      @causation_id         = causation_id
     end
 
     def call(within:, &block)
@@ -38,7 +47,9 @@ module TCB
       block.call if block
       events  = @events_from.flat_map(&:pull_recorded_events)
       events += @events
-      persist(events)
+      envelopes = persist(events)
+      insert_outbox_entries(envelopes)
+      envelopes
     rescue
       @events_from.each(&:pull_recorded_events)
       raise
@@ -51,6 +62,21 @@ module TCB
       remaining = wrap_remaining(events, persisted)
 
       order_by_original(events, persisted, remaining)
+    end
+
+    def insert_outbox_entries(envelopes)
+      return unless @outbox_store
+
+      envelopes.each do |envelope|
+        @outbox_registrations
+          .select { |r| r.event_class == envelope.event.class }
+          .each   { |r| @outbox_store.insert(
+            event_id:      envelope.event_id,
+            stream_id:     envelope.stream_id,
+            version:       envelope.version,
+            handler_class: r.handler
+          )}
+      end
     end
 
     def persist_to_store(events)

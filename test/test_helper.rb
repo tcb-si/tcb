@@ -5,6 +5,7 @@ $LOAD_PATH.unshift File.expand_path('../lib', __dir__)
 require 'minitest/autorun'
 require 'tcb'
 require_relative 'support/event_bus_dsl'
+require_relative "support/outbox_dsl"
 require "minitest/reporters"
 require "debug"
 require "date"

@@ -1,12 +1,15 @@
 # frozen_string_literal: true
 
 require_relative "tcb/envelope"
+require_relative "tcb/outbox_entry"
 require_relative "tcb/minitest_helpers"
 require_relative "tcb/domain_context"
 require_relative "tcb/correlation_query"
 require_relative "tcb/event_query"
 require_relative "tcb/event_store/active_record"
 require_relative "tcb/event_store/in_memory"
+require_relative "tcb/outbox_store/in_memory"
+require_relative "tcb/outbox_relay"
 require_relative "tcb/stream_id"
 require_relative "tcb/handles_events"
 require_relative "tcb/handles_commands"
@@ -43,11 +46,13 @@ module TCB
 
   def self.record(events_from: [], events: [], within: nil, &block)
     Record.call(
-      events_from: events_from,
-      events: events,
-      within: within,
-      store: config.event_store,
-      registrations: config.persist_registrations,
+      events_from:          events_from,
+      events:               events,
+      within:               within,
+      store:                config.event_store,
+      registrations:        config.persist_registrations,
+      outbox_registrations: config.outbox_registrations,
+      outbox_store:         config.outbox_store,
       &block
     )
   end

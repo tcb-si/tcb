@@ -30,6 +30,18 @@ module TCB
       @event_store
     end
 
+    def outbox_store=(store)
+      @outbox_store = store
+    end
+
+    def outbox_store
+      @outbox_store
+    end
+
+    def outbox_registrations
+      @outbox_registrations ||= []
+    end
+
     def domain_modules=(modules)
       @domain_modules = modules
       flush_domain_modules
@@ -109,11 +121,16 @@ module TCB
         domain_module.persist_registrations.each do |registration|
           @persist_registrations << registration.with(context: context)
         end
-        define_event_record_for(domain_module)
+        define_event_record_for(domain_module) if active_record_store?
       end
     end
 
+    def active_record_store?
+      defined?(::ActiveRecord) && @event_store.is_a?(TCB::EventStore::ActiveRecord)
+    end
+
     def flush_outbox_registrations
+      @outbox_registrations = []
       @domain_modules.each do |domain_module|
         next unless domain_module.respond_to?(:outbox_registrations)
         next unless domain_module.outbox_registrations.any?
@@ -124,9 +141,11 @@ module TCB
         outbox_event_classes.each do |event_class|
           unless persisted_event_classes.include?(event_class)
             raise ConfigurationError,
-              "#{event_class} has ensure_reaction in #{domain_module} but is not persisted. Add a persist registration."
+              "#{event_class} has ensure_reaction in #{domain_module} but is not persisted."
           end
         end
+
+        @outbox_registrations.concat(domain_module.outbox_registrations)
       end
     end
 
