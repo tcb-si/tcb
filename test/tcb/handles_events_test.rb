@@ -92,5 +92,55 @@ module TCB
       assert_equal "StandardError", failures.first.error_class
       assert_equal TestOrders::FailureAnticipated, failures.first.original_event.class
     end
+
+    module TestInvoicing
+      include TCB::HandlesEvents
+      OrderPlaced = Data.define(:order_id)
+      class SendInvoice
+        def call(event) = nil
+      end
+      on OrderPlaced, ensure_reaction(SendInvoice)
+    end
+
+    module TestInvoicing2
+      include TCB::HandlesEvents
+      OrderPlaced = Data.define(:order_id)
+      class SendInvoice; def call(event) = nil; end
+      class NotifyAccounting; def call(event) = nil; end
+      on OrderPlaced, ensure_reaction(SendInvoice, NotifyAccounting)
+    end
+
+    module TestInvoicingNoPersist
+      include TCB::HandlesEvents
+      OrderPlaced = Data.define(:order_id)
+      class SendInvoice; def call(event) = nil; end
+      on OrderPlaced, ensure_reaction(SendInvoice)
+    end
+
+    def test_ensure_reaction_registers_outbox_handler
+      assert_equal 1, TestInvoicing.outbox_registrations.size
+      assert_equal TestInvoicing::OrderPlaced, TestInvoicing.outbox_registrations.first.event_class
+      assert_equal TestInvoicing::SendInvoice, TestInvoicing.outbox_registrations.first.handler
+    end
+
+    def test_ensure_reaction_registers_multiple_handlers
+      assert_equal 2, TestInvoicing2.outbox_registrations.size
+      assert_equal TestInvoicing2::SendInvoice,      TestInvoicing2.outbox_registrations.first.handler
+      assert_equal TestInvoicing2::NotifyAccounting, TestInvoicing2.outbox_registrations.last.handler
+    end
+
+    def test_ensure_reaction_does_not_subscribe_to_event_bus
+      assert_empty TestInvoicing.event_handler_registrations
+    end
+
+    def test_ensure_reaction_without_persist_raises_configuration_error
+      TCB.reset!
+      assert_raises(TCB::ConfigurationError) do
+        TCB.domain_modules = [TestInvoicingNoPersist]
+        TCB.configure do |c|
+          c.event_bus = TCB::EventBus.new
+        end
+      end
+    end
   end
 end

@@ -4,20 +4,33 @@ module TCB
   module HandlesEvents
     EventHandlerRegistration = Data.define(:event_class, :handlers)
     PersistRegistration = Data.define(:event_classes, :stream_id_from_event, :context)
+    OutboxRegistration = Data.define(:event_class, :handler)
 
     def self.included(base)
       base.extend(ClassMethods)
       base.instance_variable_set(:@event_handler_registrations, [])
       base.instance_variable_set(:@persist_registrations, [])
+      base.instance_variable_set(:@outbox_registrations, [])
     end
 
     module ClassMethods
+      def on(event_class, registration)
+        case registration
+        in EventHandlerRegistration => r
+          @event_handler_registrations << r.with(event_class: event_class)
+        in [OutboxRegistration, *] => registrations
+          registrations.each do |r|
+            @outbox_registrations << r.with(event_class: event_class)
+          end
+        end
+      end
+
       def react_with(*handlers)
         EventHandlerRegistration.new(event_class: :undefined, handlers: handlers)
       end
 
-      def on(event_class, registration)
-        @event_handler_registrations << registration.with(event_class: event_class)
+      def ensure_reaction(*handlers)
+        handlers.map { |handler| OutboxRegistration.new(event_class: :undefined, handler: handler) }
       end
 
       def persist(registration)
@@ -38,6 +51,10 @@ module TCB
 
       def persist_registrations
         @persist_registrations
+      end
+
+      def outbox_registrations
+        @outbox_registrations
       end
     end
   end

@@ -35,6 +35,7 @@ module TCB
       flush_domain_modules
       flush_command_handlers
       flush_persist_registrations
+      flush_outbox_registrations
     end
 
     def domain_modules
@@ -109,6 +110,23 @@ module TCB
           @persist_registrations << registration.with(context: context)
         end
         define_event_record_for(domain_module)
+      end
+    end
+
+    def flush_outbox_registrations
+      @domain_modules.each do |domain_module|
+        next unless domain_module.respond_to?(:outbox_registrations)
+        next unless domain_module.outbox_registrations.any?
+
+        persisted_event_classes = domain_module.persist_registrations.flat_map(&:event_classes)
+        outbox_event_classes = domain_module.outbox_registrations.map(&:event_class).uniq
+
+        outbox_event_classes.each do |event_class|
+          unless persisted_event_classes.include?(event_class)
+            raise ConfigurationError,
+              "#{event_class} has ensure_reaction in #{domain_module} but is not persisted. Add a persist registration."
+          end
+        end
       end
     end
 
