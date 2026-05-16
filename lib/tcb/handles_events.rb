@@ -4,7 +4,7 @@ module TCB
   module HandlesEvents
     EventHandlerRegistration = Data.define(:event_class, :handlers)
     PersistRegistration = Data.define(:event_classes, :stream_id_from_event, :context)
-    OutboxRegistration = Data.define(:event_class, :handler)
+    OutboxRegistration = Data.define(:event_class, :handler, :outbox_store)
 
     def self.included(base)
       base.extend(ClassMethods)
@@ -30,7 +30,7 @@ module TCB
       end
 
       def ensure_reaction(*handlers)
-        handlers.map { |handler| OutboxRegistration.new(event_class: :undefined, handler: handler) }
+        handlers.map { |handler| OutboxRegistration.new(event_class: :undefined, handler: handler, outbox_store: nil) }
       end
 
       def persist(registration)

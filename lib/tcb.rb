@@ -53,7 +53,6 @@ module TCB
       store:                config.event_store,
       registrations:        config.persist_registrations,
       outbox_registrations: config.outbox_registrations,
-      outbox_store:         config.outbox_store,
       &block
     )
   end

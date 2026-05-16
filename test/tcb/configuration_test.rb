@@ -4,6 +4,12 @@ require_relative '../test_helper'
 
 module TCB
   class ConfigurationTest < Minitest::Test
+
+    def setup
+      TCB.reset!
+      TCB.domain_modules = []
+    end
+
     def teardown
       TCB.reset!
     end

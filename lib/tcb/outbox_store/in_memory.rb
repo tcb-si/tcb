@@ -3,7 +3,7 @@
 module TCB
   module OutboxStore
     class InMemory
-      def initialize
+      def initialize(_model = nil)
         @entries = {}
         @mutex = Mutex.new
       end
@@ -30,7 +30,9 @@ module TCB
       end
 
       def pending
-        @mutex.synchronize { @entries.values.select { |e| e.status == :pending } }
+        @mutex
+          .synchronize { @entries.values.select { |e| e.status == :pending }
+          .sort_by { |e| [e.stream_id, e.version] } }
       end
 
       def lock(entry, locked_at: Time.now)
@@ -39,8 +41,8 @@ module TCB
         updated
       end
 
-      def mark_delivered(entry)
-        updated = entry.with(status: :delivered, delivered_at: Time.now)
+      def mark_delivered(entry, delivered_at: Time.now)
+        updated = entry.with(status: :delivered, delivered_at: delivered_at)
         @mutex.synchronize { @entries[entry.id] = updated }
         updated
       end

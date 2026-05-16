@@ -29,24 +29,24 @@ module TCB
     end
 
     def setup
+      TCB.reset!
       Invoicing::DELIVERED.clear
-      @outbox_store = TCB::OutboxStore::InMemory.new
-      @event_store  = TCB::EventStore::InMemory.new
+      @event_store = TCB::EventStore::InMemory.new
       TCB.domain_modules = [Invoicing]
       TCB.configure do |c|
-        c.event_bus    = TCB::EventBus.new(sync: true)
-        c.event_store  = @event_store
-        c.outbox_store = @outbox_store
+        c.event_bus          = TCB::EventBus.new(sync: true)
+        c.event_store        = @event_store
+        c.outbox_store_class = TCB::OutboxStore::InMemory
       end
     end
 
-    def teardown
-      TCB.reset!
+    def outbox_store
+      TCB.config.outbox_registrations.first.outbox_store
     end
 
     def relay
       TCB::OutboxRelay.new(
-        outbox_store: @outbox_store,
+        outbox_store: outbox_store,
         event_store:  @event_store,
         lock_timeout: 300
       )
@@ -75,7 +75,7 @@ module TCB
 
       relay.run
 
-      assert @outbox_store.all.all? { |e| e.status == :delivered }
+      assert outbox_store.all.all? { |e| e.status == :delivered }
     end
 
     def test_relay_does_not_process_already_delivered_entries
@@ -95,7 +95,7 @@ module TCB
 
       relay.run
 
-      failed = @outbox_store.all.select { |e| e.handler_class.end_with?("SendInvoice") }
+      failed = outbox_store.all.select { |e| e.handler_class.end_with?("SendInvoice") }
       assert failed.all? { |e| e.status == :failed }
       assert failed.all? { |e| e.error == "boom" }
     ensure
@@ -109,7 +109,7 @@ module TCB
 
       relay.run
 
-      delivered = @outbox_store.all.select { |e| e.handler_class.end_with?("NotifyAccounting") }
+      delivered = outbox_store.all.select { |e| e.handler_class.end_with?("NotifyAccounting") }
       assert delivered.all? { |e| e.status == :delivered }
     ensure
       Invoicing::SendInvoice.define_method(:call) { |e| Invoicing::DELIVERED << e }
@@ -121,25 +121,24 @@ module TCB
       TCB.record(events: [Invoicing::OrderPlaced.new(order_id: 1)])
 
       # Simulate stale lock from previous crashed relay
-      entry = @outbox_store.pending.first
-      @outbox_store.lock(entry, locked_at: Time.now - 600)
+      entry = outbox_store.pending.first
+      outbox_store.lock(entry, locked_at: Time.now - 600)
 
       relay.run
 
-      assert @outbox_store.all.all? { |e| e.status == :delivered }
+      assert outbox_store.all.all? { |e| e.status == :delivered }
     end
 
     # ordering
 
     def test_relay_processes_entries_ordered_by_stream_and_version
-      TCB.record(events: [Invoicing::OrderPlaced.new(order_id: 1)])
-      TCB.record(events: [Invoicing::OrderPlaced.new(order_id: 2)])
+      TCB.record(events: [Invoicing::OrderPlaced.new(order_id: "b-order")])
+      TCB.record(events: [Invoicing::OrderPlaced.new(order_id: "a-order")])
 
       relay.run
 
       order_ids = Invoicing::DELIVERED.map { |e| e.order_id }
-
-      assert_equal order_ids.sort, order_ids
+      assert_equal ["a-order", "a-order", "b-order", "b-order"], order_ids
     end
   end
 end

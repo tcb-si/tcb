@@ -29,6 +29,7 @@ module TCB
       TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new(sync: true)
         c.event_store = TCB::EventStore::ActiveRecord.new
+        c.outbox_store_class = TCB::OutboxStore::ActiveRecord
       end
 
       assert Invoicing.const_defined?(:OutboxRecord, false)
@@ -39,6 +40,7 @@ module TCB
       TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new(sync: true)
         c.event_store = TCB::EventStore::ActiveRecord.new
+        c.outbox_store_class = TCB::OutboxStore::ActiveRecord
       end
 
       assert_equal "tcb__outbox_record_definition_test__invoicing_outbox", Invoicing::OutboxRecord.table_name
@@ -49,19 +51,10 @@ module TCB
       TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new(sync: true)
         c.event_store = TCB::EventStore::ActiveRecord.new
+        c.outbox_store_class = TCB::OutboxStore::ActiveRecord
       end
 
       assert Invoicing::OutboxRecord.ancestors.include?(::ActiveRecord::Base)
-    end
-
-    def test_outbox_store_set_automatically
-      TCB.domain_modules = [Invoicing]
-      TCB.configure do |c|
-        c.event_bus   = TCB::EventBus.new(sync: true)
-        c.event_store = TCB::EventStore::ActiveRecord.new
-      end
-
-      assert_instance_of TCB::OutboxStore::ActiveRecord, TCB.config.outbox_store
     end
 
     def test_existing_outbox_record_is_not_overwritten
@@ -72,6 +65,7 @@ module TCB
       TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new(sync: true)
         c.event_store = TCB::EventStore::ActiveRecord.new
+        c.outbox_store_class = TCB::OutboxStore::ActiveRecord
       end
 
       assert_same sentinel, Invoicing::OutboxRecord
@@ -88,6 +82,7 @@ module TCB
       TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new(sync: true)
         c.event_store = TCB::EventStore::ActiveRecord.new
+        c.outbox_store_class = TCB::OutboxStore::ActiveRecord
       end
 
       refute mod.const_defined?(:OutboxRecord, false)

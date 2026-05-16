@@ -17,6 +17,7 @@ module TCB
     end
 
     def setup
+      TCB.reset!
       TCB.domain_modules = [Orders]
       TCB.configure do |c|
         c.event_bus   = TCB::EventBus.new(sync: true)

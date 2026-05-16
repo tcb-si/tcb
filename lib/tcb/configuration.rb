@@ -30,12 +30,12 @@ module TCB
       @event_store
     end
 
-    def outbox_store=(store)
-      @outbox_store = store
+    def outbox_store_class=(store)
+      @outbox_store_class = store
     end
 
-    def outbox_store
-      @outbox_store
+    def outbox_store_class
+      @outbox_store_class
     end
 
     def outbox_registrations
@@ -135,22 +135,38 @@ module TCB
         next unless domain_module.respond_to?(:outbox_registrations)
         next unless domain_module.outbox_registrations.any?
 
-        persisted_event_classes = domain_module.persist_registrations.flat_map(&:event_classes)
-        outbox_event_classes = domain_module.outbox_registrations.map(&:event_class).uniq
+        validate_outbox_registrations!(domain_module)
+        store = build_outbox_store(domain_module)
 
-        outbox_event_classes.each do |event_class|
-          unless persisted_event_classes.include?(event_class)
-            raise ConfigurationError,
-              "#{event_class} has ensure_reaction in #{domain_module} but is not persisted."
-          end
+        domain_module.outbox_registrations.each do |r|
+          @outbox_registrations << r.with(outbox_store: store)
         end
+      end
+    end
 
-        @outbox_registrations.concat(domain_module.outbox_registrations)
 
-        if active_record_store?
-          define_outbox_record_for(domain_module)
-          @outbox_store ||= OutboxStore::ActiveRecord.new(domain_module.const_get(:OutboxRecord))
+    def validate_outbox_registrations!(domain_module)
+      persisted_event_classes = domain_module.persist_registrations.flat_map(&:event_classes)
+
+      domain_module.outbox_registrations.map(&:event_class).uniq.each do |event_class|
+        unless persisted_event_classes.include?(event_class)
+          raise ConfigurationError,
+            "#{event_class} has ensure_reaction in #{domain_module} but is not persisted."
         end
+      end
+
+      unless @outbox_store_class
+        raise ConfigurationError,
+          "#{domain_module} has outbox registrations but no outbox_store_class is configured."
+      end
+    end
+
+    def build_outbox_store(domain_module)
+      if active_record_store?
+        define_outbox_record_for(domain_module)
+        @outbox_store_class.new(domain_module.const_get(:OutboxRecord))
+      else
+        @outbox_store_class.new(nil)
       end
     end
 

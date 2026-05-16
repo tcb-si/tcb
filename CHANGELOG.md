@@ -9,16 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `TCB::OutboxStore::ActiveRecord` — ActiveRecord persistence adapter for outbox entries; drop-in replacement for `OutboxStore::InMemory`
-- `TCB::OutboxEntry` — value object carrying outbox entry state: `id`, `event_id`, `stream_id`, `version`, `handler_class`, `status`, `locked_at`, `delivered_at`, `error`, `created_at`
-- `TCB::OutboxRelay` — single polling cycle: recover stale locks → lock pending → fetch envelopes → invoke handler → mark delivered/failed
-- `TCB::OutboxStore::InMemory` — thread-safe in-memory outbox store for tests
 - `ensure_reaction` DSL — declares guaranteed delivery handlers via outbox pattern; used as `on EventClass, ensure_reaction(Handler)`
+- `TCB::OutboxEntry` — value object carrying outbox entry state: `id`, `event_id`, `stream_id`, `version`, `handler_class`, `status`, `locked_at`, `delivered_at`, `error`, `created_at`
+- `TCB::OutboxStore::InMemory` — thread-safe in-memory outbox store for tests
+- `TCB::OutboxStore::ActiveRecord` — ActiveRecord persistence adapter for outbox entries; drop-in replacement for `OutboxStore::InMemory`
+- `TCB::OutboxRelay` — single polling cycle: recover stale locks → lock pending → fetch envelopes → invoke handler → mark delivered/failed
+- `Configuration#outbox_store_class` — declares which outbox store adapter to use (`OutboxStore::InMemory` or `OutboxStore::ActiveRecord`); store is instantiated per domain module during configuration
+- `Configuration#outbox_registrations` — collected outbox handler registrations across domain modules, each carrying a reference to its domain's store instance
 - `DomainContext#outbox_table_name` — derives per-domain outbox table name (`..._outbox` suffix)
-- `Configuration#outbox_store` — automatically set to `OutboxStore::ActiveRecord` when domain module has outbox registrations and AR event store is configured
-- `Configuration#outbox_registrations` — collected outbox handler registrations across domain modules
-- `Invoicing::OutboxRecord` — AR model defined dynamically per domain module with outbox registrations; analogous to `EventRecord`
-- Rails generator: `tcb:outbox` — generates outbox migration and job scaffold per domain module
+- Per-domain `OutboxRecord` AR model defined dynamically for domain modules with outbox registrations; analogous to `EventRecord`
+- Rails generator `tcb:outbox` — generates outbox migration and job scaffold per domain module
 - Outbox migration template — table with `id` (string UUID, primary key), `event_id`, `stream_id`, `version`, `handler_class`, `status`, `locked_at`, `delivered_at`, `error`, `created_at`; indexes on `:status`, `[:status, :locked_at]`, `[:stream_id, :version]`
 - Outbox job template — `ApplicationJob` wrapper around `OutboxRelay` for SolidQueue/Sidekiq integration
 

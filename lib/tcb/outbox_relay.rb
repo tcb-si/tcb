@@ -24,8 +24,7 @@ module TCB
     def lock_pending
       @outbox_store
         .pending
-        .sort_by { |e| [e.stream_id, e.version] }
-        .map      { |e| @outbox_store.lock(e) }
+        .map { |e| @outbox_store.lock(e) }
     end
 
     def fetch_envelopes(entries)

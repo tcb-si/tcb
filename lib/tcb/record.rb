@@ -3,7 +3,7 @@
 module TCB
   class Record
     def self.call(
-      events_from:, events:, within:, store:, registrations:, outbox_registrations: [], outbox_store: nil, &block
+      events_from:, events:, within:, store:, registrations:, outbox_registrations: [], &block
     )
       raise ArgumentError, "events_from: or events: must be provided" if events_from.empty? && events.empty?
 
@@ -13,14 +13,13 @@ module TCB
         store:                store,
         registrations:        registrations,
         outbox_registrations: outbox_registrations,
-        outbox_store:         outbox_store,
         correlation_id:       Thread.current[:tcb_correlation_id],
         causation_id:         Thread.current[:tcb_causation_id]
       ).call(within: within, &block)
     end
 
     def initialize(
-      events_from:, events:, store:, registrations:, outbox_registrations: [], outbox_store: nil,
+      events_from:, events:, store:, registrations:, outbox_registrations: [],
       correlation_id: nil, causation_id: nil
     )
       @events_from          = events_from
@@ -28,7 +27,6 @@ module TCB
       @store                = store
       @registrations        = registrations
       @outbox_registrations = outbox_registrations
-      @outbox_store         = outbox_store
       @correlation_id       = correlation_id
       @causation_id         = causation_id
     end
@@ -65,12 +63,10 @@ module TCB
     end
 
     def insert_outbox_entries(envelopes)
-      return unless @outbox_store
-
       envelopes.each do |envelope|
         @outbox_registrations
           .select { |r| r.event_class == envelope.event.class }
-          .each   { |r| @outbox_store.insert(
+          .each   { |r| r.outbox_store.insert(
             event_id:      envelope.event_id,
             stream_id:     envelope.stream_id,
             version:       envelope.version,
