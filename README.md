@@ -32,6 +32,28 @@ Clean domain code pays compound interest. It's easier to reason about, easier to
 and easier for AI agents to work with. TCB keeps your domain that way.
 Rails takes care of the rest.
 
+
+## Contents
+
+- [Installation](#installation)
+- [Event Bus](#event-bus)
+- [TCB::HandlesEvents](#tcbhandlesevents)
+- [TCB::HandlesCommands](#tcbhandlescommands)
+- [Domain-Driven Design](#domain-driven-design)
+- [Guaranteed Delivery with the Outbox Pattern](#guaranteed-delivery-with-the-outbox-pattern)
+- [Configuration](#configuration)
+- [Reading Events](#reading-events)
+- [Correlation and Causation Tracking](#correlation-and-causation-tracking)
+- [Reading a Correlation Chain](#reading-a-correlation-chain)
+- [Event Store Adapters](#event-store-adapters)
+- [Generators](#generators)
+- [Error Handling](#error-handling)
+- [Graceful Shutdown](#graceful-shutdown)
+- [Testing](#testing)
+- [Why `Data.define`](#why-datadefine)
+
+---
+
 ## Installation
 
 Add this line to your application's Gemfile:
@@ -392,6 +414,92 @@ end
 
 ---
 
+## Guaranteed Delivery with the Outbox Pattern
+
+`on Event, Handler` delivers reactions synchronously and best-effort. If the process crashes mid-dispatch, or a handler calls an external service that fails, the reaction is lost. For cross-domain reactions that must eventually succeed, like sending emails, enqueuing jobs, notifying external systems, TCB offers `ensure_reaction`.
+
+```ruby
+module Invoicing
+  include TCB::Domain
+
+  OrderPlaced = Data.define(:order_id)
+
+  persist events(OrderPlaced, stream_id_from_event: :order_id)
+
+  on OrderPlaced, ensure_reaction(SendInvoice, NotifyAccounting)
+end
+```
+
+`ensure_reaction` does not call your handlers inline. Instead, `TCB.record` writes outbox entries atomically alongside the event, in the same database transaction. A background job polls the outbox, invokes each handler, and marks the entry delivered. If the process crashes before the job runs, the entries remain pending and will be picked up on the next poll.
+
+> `ensure_reaction` requires the event to be persisted. `persist events(...)` must be declared in the same domain module.
+
+### Setup
+
+If your outbox handlers call Rails infrastructure — ActiveJob, mailers, or other application classes — place your full configuration in `config/initializers/tcb.rb`. This ensures Rails is fully loaded when handlers execute:
+
+```ruby
+# config/initializers/tcb.rb
+Rails.application.config.to_prepare do
+  TCB.reset!
+  TCB.domain_modules = [Sales, Warehouse, Notifications]
+
+  TCB.configure do |c|
+    case Rails.env
+    when "test"
+      c.event_bus          = TCB::EventBus.new(sync: true)
+      c.event_store        = TCB::EventStore::InMemory.new
+      c.outbox_store_class = TCB::OutboxStore::InMemory
+    when "development"
+      c.event_bus          = TCB::EventBus.new(handle_signals: false, shutdown_timeout: 10.0)
+      c.event_store        = TCB::EventStore::ActiveRecord.new
+      c.outbox_store_class = TCB::OutboxStore::ActiveRecord
+    when "production"
+      c.event_bus          = TCB::EventBus.new(handle_signals: true, shutdown_timeout: 30.0)
+      c.event_store        = TCB::EventStore::ActiveRecord.new
+      c.outbox_store_class = TCB::OutboxStore::ActiveRecord
+    end
+  end
+end
+```
+
+`OutboxStore::InMemory` is a drop-in replacement for tests. Entries live in memory and do not require a migration.
+
+### Generator
+
+Generate the outbox migration and job scaffold for a domain module:
+
+```CLI
+bin/rails generate tcb:outbox invoicing
+```
+
+This creates:
+
+- `db/migrate/..._create_invoicing_outbox.rb` — the outbox table
+- `app/jobs/invoicing_outbox_job.rb` — a job that runs one relay cycle
+
+```ruby
+class InvoicingOutboxJob < ApplicationJob
+  queue_as :default
+
+  def perform
+    TCB::OutboxRelay.new(
+      outbox_store: Invoicing::OutboxRecord,
+      event_store:  TCB.config.event_store,
+      lock_timeout: 300
+    ).run
+  end
+end
+```
+
+Schedule this job with SolidQueue, Sidekiq, or any ActiveJob backend. Each `perform` call runs one polling cycle: recover stale locks → lock pending entries → fetch events → invoke handlers → mark delivered or failed.
+
+### Failure handling
+
+If a handler raises, the entry is marked `failed` and the error message is stored. Other entries in the same cycle continue processing. Failed entries are not retried automatically. Retry is the responsibility of your job scheduler. Schedule the job to run periodically and retries happen naturally on the next cycle.
+
+---
+
 ## Configuration
 
 ### Domain modules
@@ -414,11 +522,12 @@ Infrastructure is environment-specific. Configure it in each environment file so
 Rails.application.config.to_prepare do
   TCB.reset!
   TCB.configure do |c|
-    c.event_bus   = TCB::EventBus.new(
-      handle_signals: false,   # Rails manages process signals in development
+    c.event_bus          = TCB::EventBus.new(
+      handle_signals: false,
       shutdown_timeout: 10.0
     )
-    c.event_store = TCB::EventStore::ActiveRecord.new
+    c.event_store        = TCB::EventStore::ActiveRecord.new
+    c.outbox_store_class = TCB::OutboxStore::ActiveRecord  # required if any domain uses ensure_reaction
   end
 end
 ```
@@ -430,11 +539,12 @@ end
 Rails.application.config.to_prepare do
   TCB.reset!(graceful_shutdown_time: 10.0)
   TCB.configure do |c|
-    c.event_bus   = TCB::EventBus.new(
+    c.event_bus          = TCB::EventBus.new(
       handle_signals: true,
       shutdown_timeout: 30.0
     )
-    c.event_store = TCB::EventStore::ActiveRecord.new
+    c.event_store        = TCB::EventStore::ActiveRecord.new
+    c.outbox_store_class = TCB::OutboxStore::ActiveRecord
   end
 end
 ```
@@ -445,8 +555,9 @@ end
 # config/environments/test.rb
 Rails.application.config.after_initialize do
   TCB.configure do |c|
-    c.event_bus   = TCB::EventBus.new(sync: true)
-    c.event_store = TCB::EventStore::InMemory.new
+    c.event_bus          = TCB::EventBus.new(sync: true)
+    c.event_store        = TCB::EventStore::InMemory.new
+    c.outbox_store_class = TCB::OutboxStore::InMemory  # in-memory, no migration needed
   end
 end
 ```
