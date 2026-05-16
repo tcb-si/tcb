@@ -163,7 +163,7 @@ module Notifications
 end
 ```
 
-Event classes can come from anywhere. Cross-module reactions are the norm, not the exception. Each handler is isolated. Ine failure does not prevent others from executing.
+Event classes can come from anywhere. Cross-module reactions are the norm, not the exception. Each handler is isolated. One failure does not prevent others from executing.
 
 Domain modules are declared once at the top level, before infrastructure is configured.
 This is the only place TCB needs to know about your bounded contexts. All reactions,
