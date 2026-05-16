@@ -5,6 +5,8 @@ module TCB
     NAMESPACE_SEPARATOR = "/"
     TABLE_SEPARATOR     = "__"
     TABLE_SUFFIX        = "_events"
+    OUTBOX_SUFFIX       = "_outbox"
+
 
     def self.from_module(domain_module)
       value = domain_module.name
@@ -24,6 +26,12 @@ module TCB
       value
         .gsub(NAMESPACE_SEPARATOR, TABLE_SEPARATOR)
         .concat(TABLE_SUFFIX)
+    end
+
+    def outbox_table_name
+      value
+        .gsub(NAMESPACE_SEPARATOR, TABLE_SEPARATOR)
+        .concat(OUTBOX_SUFFIX)
     end
   end
 end

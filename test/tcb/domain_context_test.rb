@@ -52,5 +52,15 @@ module TCB
     def test_table_suffix_constant
       assert_equal "_events", DomainContext::TABLE_SUFFIX
     end
+
+    def test_outbox_table_name_simple_module
+      context = DomainContext.from_module(Orders)
+      assert_equal "tcb__domain_context_test__orders_outbox", context.outbox_table_name
+    end
+
+    def test_outbox_table_name_nested_module
+      context = DomainContext.from_module(Payments::Charges)
+      assert_equal "tcb__domain_context_test__payments__charges_outbox", context.outbox_table_name
+    end
   end
 end

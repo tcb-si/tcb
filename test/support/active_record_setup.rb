@@ -23,6 +23,19 @@ ActiveRecord::Schema.define do
   add_index :orders_events, [:stream_id, :version], unique: true, if_not_exists: true
   add_index :orders_events, :event_id,              unique: true, if_not_exists: true
   add_index :orders_events, :correlation_id,                      if_not_exists: true
+
+  create_table :tcb__outbox_store__active_record_test__invoicing_outbox, force: :cascade, id: false do |t|
+    t.string   :id,            null: false
+    t.string   :event_id,      null: false
+    t.string   :stream_id,     null: false
+    t.integer  :version,       null: false
+    t.string   :handler_class, null: false
+    t.string   :status,        null: false, default: "pending"
+    t.datetime :locked_at
+    t.datetime :delivered_at
+    t.text     :error
+    t.datetime :created_at,    null: false
+  end
 end
 
 module Orders

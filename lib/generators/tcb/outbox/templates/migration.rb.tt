@@ -1,0 +1,20 @@
+class <%= migration_class_name %> < ActiveRecord::Migration[8.1]
+  def change
+    create_table :<%= table_name %>, id: false, primary_key: :id do |t|
+  t.string :id, null: false
+      t.string   :event_id,      null: false
+      t.string   :stream_id,     null: false
+      t.integer  :version,       null: false
+      t.string   :handler_class, null: false
+      t.string   :status,        null: false, default: "pending"
+      t.datetime :locked_at
+      t.datetime :delivered_at
+      t.text     :error
+      t.datetime :created_at,    null: false
+    end
+
+    add_index :<%= table_name %>, :status
+    add_index :<%= table_name %>, [:status, :locked_at]
+    add_index :<%= table_name %>, [:stream_id, :version]
+  end
+end

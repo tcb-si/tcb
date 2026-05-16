@@ -146,7 +146,22 @@ module TCB
         end
 
         @outbox_registrations.concat(domain_module.outbox_registrations)
+
+        if active_record_store?
+          define_outbox_record_for(domain_module)
+          @outbox_store ||= OutboxStore::ActiveRecord.new(domain_module.const_get(:OutboxRecord))
+        end
       end
+    end
+
+    def define_outbox_record_for(domain_module)
+      return if domain_module.const_defined?(:OutboxRecord, false)
+
+      klass = Class.new(::ActiveRecord::Base) do
+        self.table_name  = DomainContext.from_module(domain_module).outbox_table_name
+        self.primary_key = "id"
+      end
+      domain_module.const_set(:OutboxRecord, klass)
     end
 
     def define_event_record_for(domain_module)

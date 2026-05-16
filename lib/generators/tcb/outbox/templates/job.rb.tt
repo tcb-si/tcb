@@ -1,0 +1,11 @@
+class <%= job_class_name %> < ApplicationJob
+  queue_as :default
+
+  def perform
+    TCB::OutboxRelay.new(
+      outbox_store: <%= module_class_name %>::OutboxRecord,
+      event_store:  TCB.config.event_store,
+      lock_timeout: 300
+    ).run
+  end
+end

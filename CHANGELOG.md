@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `TCB::OutboxStore::ActiveRecord` — ActiveRecord persistence adapter for outbox entries; drop-in replacement for `OutboxStore::InMemory`
+- `TCB::OutboxEntry` — value object carrying outbox entry state: `id`, `event_id`, `stream_id`, `version`, `handler_class`, `status`, `locked_at`, `delivered_at`, `error`, `created_at`
+- `TCB::OutboxRelay` — single polling cycle: recover stale locks → lock pending → fetch envelopes → invoke handler → mark delivered/failed
+- `TCB::OutboxStore::InMemory` — thread-safe in-memory outbox store for tests
+- `ensure_reaction` DSL — declares guaranteed delivery handlers via outbox pattern; used as `on EventClass, ensure_reaction(Handler)`
+- `DomainContext#outbox_table_name` — derives per-domain outbox table name (`..._outbox` suffix)
+- `Configuration#outbox_store` — automatically set to `OutboxStore::ActiveRecord` when domain module has outbox registrations and AR event store is configured
+- `Configuration#outbox_registrations` — collected outbox handler registrations across domain modules
+- `Invoicing::OutboxRecord` — AR model defined dynamically per domain module with outbox registrations; analogous to `EventRecord`
+- Rails generator: `tcb:outbox` — generates outbox migration and job scaffold per domain module
+- Outbox migration template — table with `id` (string UUID, primary key), `event_id`, `stream_id`, `version`, `handler_class`, `status`, `locked_at`, `delivered_at`, `error`, `created_at`; indexes on `:status`, `[:status, :locked_at]`, `[:stream_id, :version]`
+- Outbox job template — `ApplicationJob` wrapper around `OutboxRelay` for SolidQueue/Sidekiq integration
+
 ## [0.6.2] - 2026-05-07
 
 ### Fixed
